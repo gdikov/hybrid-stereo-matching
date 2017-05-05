@@ -87,3 +87,11 @@ ENV/
 
 # Rope project settings
 .ropeproject
+
+# PyCharm project settings
+.idea
+
+# Large datasets
+data/ground_truth
+data/left_view
+data/right_view
