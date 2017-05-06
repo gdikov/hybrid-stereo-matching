@@ -1,4 +1,5 @@
 import numpy as np
+np.random.seed(7)
 
 import matplotlib.pyplot as plt
 import skimage.io as skio

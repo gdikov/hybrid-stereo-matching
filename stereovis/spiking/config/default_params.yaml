@@ -1,0 +1,43 @@
+# the notation for the synaptic parameters is as follows:
+# B blocker, C collector, S spike source, (2, 4)
+# w weight, d delay, (1)
+# a one's own, z other, (3)
+# i inhibition, e excitation  (5)
+# If B is before C than the connection is from B to C.
+# Example: dSaB would mean a dealy from a spike source to the one's own blocker neuron, and
+# wSzB would be the weight from a spike source to the heterolateral blocker neuron.
+
+
+
+params:
+  - simulation:
+    - time_step: 0.2
+
+  - neural:
+    - tau_E: 2.0
+    - tau_I': 2.0
+    - tau_mem': 2.07
+    - v_reset_blocker': -84.0,
+    - v_reset_collector': -90.0
+
+  - synaptic:
+    - wBC: 18.0  # although the parameter is inhibitory, it should be a positive real number
+    - dBC: 0.2
+    - wSC: 18.0
+    - dSC: 1.6
+    - wSaB: 18.0
+    - dSaB: 0.2
+    - wSzB: 18.0
+    - dSzB: 0.2
+    - wCCi: 18.0
+    - dCCi: 0.2
+    - wCCe: 1.8
+    - dCCe: 0.2
+
+  - topological:
+    - n_cols: 128
+    - n_rows: 128
+    - radius_e: 1
+    - radius_i: 128
+    - min_disparity: 0
+    - max_disparity: 10
