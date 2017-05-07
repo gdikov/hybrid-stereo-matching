@@ -1,12 +1,11 @@
 import numpy as np
 np.random.seed(7)
 
-import matplotlib.pyplot as plt
 import skimage.io as skio
 import skimage.feature as skft
 
 from utils.file_io import load_ground_truth
-from stereovis.stereo_mrf import StereoMRF
+from stereovis.framed.stereo_mrf import StereoMRF
 
 
 if __name__ == '__main__':
