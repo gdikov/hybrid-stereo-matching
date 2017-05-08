@@ -35,6 +35,9 @@ params:
     - dCCe: 0.2
 
   - topological:
+    - add_gating: False
+    - add_continuity_constraint: True
+    - add_uniqueness_constraint: True
     - radius_e: 1
     - radius_i: 128
     - min_disparity: 0

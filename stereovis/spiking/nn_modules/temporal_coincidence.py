@@ -3,6 +3,7 @@ import logging
 
 import numpy as np
 import scipy.sparse as sps
+import itertools as it
 import spynnaker.pyNN as pyNN
 
 from utils.params import load_params
@@ -21,7 +22,7 @@ class TemporalCoincidenceDetectionNetwork:
         if params is None:
             self.params = load_params(os.path.join(path_to_params, 'default_params.yaml'))
         else:
-            self.params = load_params(os.path.join(path_to_params, 'default' + '_params.yaml'))
+            self.params = load_params(os.path.join(path_to_params, params + '_params.yaml'))
 
         if self.params['topological']['min_disparity'] > 0:
             logger.warning("Detected invalid minimum disparity of {}. "
@@ -33,9 +34,12 @@ class TemporalCoincidenceDetectionNetwork:
         self.size = (2 * (self.params['topological']['n_cols'] - self.params['topological']['min_disparity']) *
                      (disp_range + 1) - (disp_range + 1) ** 2 + disp_range + 1) / 2
 
-        self._network = self._create_network()
-
+        self._network = self._create_network(add_gating=self.params['topological']['add_gating'])
         self._connect_spike_sources(input_sources=input_sources)
+        if self.params['topological']['add_uniqueness_constraint']:
+            self._apply_uniqueness_constraint()
+        if self.params['topological']['add_continuity_constraint']:
+            self._apply_continuity_constraint()
 
     def _create_network(self, record_spikes=False, add_gating=True):
         """
@@ -94,7 +98,7 @@ class TemporalCoincidenceDetectionNetwork:
             network: a dict with 'blockers' and 'collectors' lists of populations.
 
         Returns:
-
+            In-place method
         """
         logger.info("Gating blocker and collector populations initiated.")
         # generate connection lists as follows:
@@ -120,7 +124,7 @@ class TemporalCoincidenceDetectionNetwork:
             input_sources: a dict with 'left' and 'right' keys containing the left and right retina respectively
 
         Returns:
-
+            In-place method
         """
         logger.info("Connecting spike sources to the temporal coincidence detection network initiated.")
 
@@ -172,3 +176,95 @@ class TemporalCoincidenceDetectionNetwork:
         connect_retina(retina_left, self._network_topology, ret_l_block_l, ret_l_block_r)
         connect_retina(retina_right, self._network_topology.T, ret_r_block_l, ret_r_block_r)
         logger.info("Connecting spike sources to the temporal coincidence detection network completed.")
+
+    def _apply_uniqueness_constraint(self):
+        """
+        Implement the David Marr's uniqueness constraint which prohibits the spiking of multiple 
+        disparity sensitive neurons which correspond to the same pixel, i.e. a physical point should
+        be assigned to at most one depth value.
+        
+        Returns:
+            In-place method
+        """
+        logger.info("Applying the uniqueness constraint on the temporal coincidence network.")
+
+        if self.params['topological']['radius_i'] < self.params['retina']['n_cols']:
+            new_radius = self.params['retina']['n_cols']
+            logger.warning("Radius of inhibition was too small! Uniquness constraint cannot be satisfied. "
+                           "Setting radius to {}".format(new_radius))
+            self.params['topological']['radius_i'] = new_radius
+
+        def inhibit_along_eyesight(network_topology):
+            for population_ids in network_topology:
+                # generate population id pairs from all populations lying along the projection axis
+                pairs = filter(lambda x: x[0] != x[1], it.product(population_ids, repeat=2))
+                logger.debug("Generated inhibitory connection list for populations {}".format(pairs))
+                for presynaptic, postsynaptic in pairs:
+                    pyNN.Projection(self._network['collectors'][presynaptic],
+                                    self._network['collectors'][postsynaptic],
+                                    pyNN.OneToOneConnector(weights=self.params['synaptic']['wCCi'],
+                                                           delays=self.params['synaptic']['dCCi']),
+                                    target='inhibitory')
+
+        # connect for inhibition for the left retina
+        inhibit_along_eyesight(self._network_topology)
+        # and for the right
+        inhibit_along_eyesight(self._network_topology.T)
+        logger.info("Applying the uniqueness constraint on the temporal coincidence network completed.")
+
+    def _apply_continuity_constraint(self):
+        """
+        Implement the David Marr's continuity constraint which encourages the spiking of disparity sensitive neurons 
+        which lie in the same disparity map. This is backed by the assumption that physical object are coherent 
+        and disparity does not change by much (if at all).
+        
+        Returns:
+            In-place method
+        """
+        logger.info("Applying the continuity constraint on the temporal coincidence network.")
+        logger.warning("The current implementation supports only cross-like connection patterns, "
+                       "i.e. a neuron will excite only neurons to the left, right, top and bottom. "
+                       "This may be improved in the future.")
+
+        if self.params['topological']['radius_e'] > self.params['retina']['n_cols']:
+            new_radius = 1
+            logger.warning("Radius of excitation is too big. Setting radius to {}".format(new_radius))
+            self.params['topological']['radius_e'] = new_radius
+
+        def nwise(iterable, n=2):
+            iters = it.tee(iterable, n)
+            for i, obj in enumerate(iters):
+                next(it.islice(obj, i, i), None)
+            return it.izip(*iters)
+
+        def excite_neighbours(ids):
+            # iterate over population or neural ids and construct pairs from neighbouring units
+            for unit_id in ids:
+                # pairs of population id to be connected for excitation within a disparity map
+                pairs = list(set(sum([list(it.combinations(x, 2))
+                                      for x in nwise(unit_id, n=self.params['topological']['radius_e'])], [])))
+                # add the reciprocal connections too
+                pairs = pairs + map(lambda y: (y[1], y[0]), pairs)
+                return pairs
+
+        same_disparity_populations = (np.diagonal(self._network_topology, i)
+                                      for i in xrange(self.params['topology']['min_disparity'],
+                                                      -self.params['topology']['max_disparity'], -1))
+        logger.debug("Same-disparity population ids: {}".format(same_disparity_populations))
+
+        for population_ids in same_disparity_populations:
+            for presynaptic, postsynaptic in excite_neighbours(population_ids):
+                pyNN.Projection(self._network['collectors'][presynaptic],
+                                self._network['collectors'][postsynaptic],
+                                pyNN.OneToOneConnector(weights=self.params['synaptic']['wCCe'],
+                                                       delays=self.params['synaptic']['dCCe']),
+                                target='excitatory')
+
+        within_population_neuron_pairs = excite_neighbours(range(self.params['retina']['n_rows']))
+        logger.debug("Within-population neuron pairs: {}".format(within_population_neuron_pairs))
+
+        for population in self._network['collectors']:
+            pyNN.Projection(presynaptic_population=population, postsynaptic_population=population,
+                            connector=pyNN.FromListConnector(within_population_neuron_pairs),
+                            target='excitatory')
+        logger.info("Applying the continuity constraint on the temporal coincidence network completed.")
