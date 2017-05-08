@@ -35,9 +35,11 @@ params:
     - dCCe: 0.2
 
   - topological:
-    - n_cols: 128
-    - n_rows: 128
     - radius_e: 1
     - radius_i: 128
     - min_disparity: 0
     - max_disparity: 10
+
+  - retina:
+    - n_cols: 128
+    - n_rows: 128
