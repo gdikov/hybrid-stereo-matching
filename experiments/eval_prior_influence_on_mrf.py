@@ -1,6 +1,7 @@
 import numpy as np
 np.random.seed(7)
 
+import matplotlib.pyplot as plt
 import skimage.io as skio
 import skimage.feature as skft
 
@@ -33,9 +34,9 @@ if __name__ == '__main__':
     max_disp = np.max(ground_truth)
     print("Max disparity: {}".format(max_disp))
 
-    # Initialise a MRF and calculate the some (possible sub-optimal) disparity assignemnt
+    # Initialise a MRF and calculate the some (possible sub-optimal) disparity assignment
     img_res = img_left.shape
-    mrf = StereoMRF(img_res, n_levels= max_disp +1)
+    mrf = StereoMRF(img_res, n_levels=max_disp + 1)
     disp_map = mrf.lbp(img_left, img_right, n_iter=50)
     # skio.imshow_collection([disp_map, ground_truth])
     # plt.show()
@@ -46,7 +47,7 @@ if __name__ == '__main__':
     edges_mask = skft.canny(ground_truth.astype('float'), sigma=2)
     prior = ground_truth * (np.random.uniform(size=img_left.shape) <= prior_density)
     # prior = prior * edges_mask
-    prior[prior == 0] = max_disp+ 2
+    prior[prior == 0] = max_disp + 2
     # skio.imshow(prior)
     # plt.show()
 
