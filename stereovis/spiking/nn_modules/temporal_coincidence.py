@@ -12,11 +12,12 @@ logger = logging.getLogger(__file__)
 
 
 class TemporalCoincidenceDetectionNetwork:
-    def __init__(self, input_sources=None, params=None):
+    def __init__(self, input_sources=None, params=None, mode='offline'):
         """
         Args:
             input_sources: a dict of left and right view event inputs as SpikeSourceArrays 
             params: filename of the parameter yaml file containing the neural and topological settings of the network
+            mode: the operation mode. Can be `offline` or `online`.
         """
         path_to_params = os.path.join(os.path.abspath(os.path.dirname(__file__)), "..", "config")
         if params is None:
@@ -34,7 +35,13 @@ class TemporalCoincidenceDetectionNetwork:
         self.size = (2 * (self.params['topological']['n_cols'] - self.params['topological']['min_disparity']) *
                      (disp_range + 1) - (disp_range + 1) ** 2 + disp_range + 1) / 2
 
-        self._network = self._create_network(add_gating=self.params['topological']['add_gating'])
+        if mode == 'offline':
+            self._network = self._create_network(record_spikes=True,
+                                                 add_gating=self.params['topological']['add_gating'])
+        else:
+            self._network = self._create_network(record_spikes=False,
+                                                 add_gating=self.params['topological']['add_gating'])
+
         self._connect_spike_sources(input_sources=input_sources)
         if self.params['topological']['add_uniqueness_constraint']:
             self._apply_uniqueness_constraint()
