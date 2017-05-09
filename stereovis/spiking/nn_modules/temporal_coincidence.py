@@ -7,6 +7,7 @@ import itertools as it
 import spynnaker.pyNN as pyNN
 
 from utils.params import load_params
+from utils.helpers import pairs_of_neighbours
 
 logger = logging.getLogger(__file__)
 
@@ -207,10 +208,10 @@ class TemporalCoincidenceDetectionNetwork:
                 pairs = filter(lambda x: x[0] != x[1], it.product(population_ids, repeat=2))
                 logger.debug("Generated inhibitory connection list for populations {}".format(pairs))
                 for presynaptic, postsynaptic in pairs:
-                    pyNN.Projection(self._network['collectors'][presynaptic],
-                                    self._network['collectors'][postsynaptic],
-                                    pyNN.OneToOneConnector(weights=self.params['synaptic']['wCCi'],
-                                                           delays=self.params['synaptic']['dCCi']),
+                    pyNN.Projection(presynaptic_population=self._network['collectors'][presynaptic],
+                                    postsynaptic_population=self._network['collectors'][postsynaptic],
+                                    connector=pyNN.OneToOneConnector(weights=self.params['synaptic']['wCCi'],
+                                                                     delays=self.params['synaptic']['dCCi']),
                                     target='inhibitory')
 
         # connect for inhibition for the left retina
@@ -238,36 +239,26 @@ class TemporalCoincidenceDetectionNetwork:
             logger.warning("Radius of excitation is too big. Setting radius to {}".format(new_radius))
             self.params['topological']['radius_e'] = new_radius
 
-        def nwise(iterable, n=2):
-            iters = it.tee(iterable, n)
-            for i, obj in enumerate(iters):
-                next(it.islice(obj, i, i), None)
-            return it.izip(*iters)
-
-        def excite_neighbours(ids):
-            # iterate over population or neural ids and construct pairs from neighbouring units
-            for unit_id in ids:
-                # pairs of population id to be connected for excitation within a disparity map
-                pairs = list(set(sum([list(it.combinations(x, 2))
-                                      for x in nwise(unit_id, n=self.params['topological']['radius_e'])], [])))
-                # add the reciprocal connections too
-                pairs = pairs + map(lambda y: (y[1], y[0]), pairs)
-                return pairs
-
         same_disparity_populations = (np.diagonal(self._network_topology, i)
                                       for i in xrange(self.params['topology']['min_disparity'],
                                                       -self.params['topology']['max_disparity'], -1))
         logger.debug("Same-disparity population ids: {}".format(same_disparity_populations))
 
+        # iterate over population or neural ids and construct pairs from neighbouring units
         for population_ids in same_disparity_populations:
-            for presynaptic, postsynaptic in excite_neighbours(population_ids):
-                pyNN.Projection(self._network['collectors'][presynaptic],
-                                self._network['collectors'][postsynaptic],
-                                pyNN.OneToOneConnector(weights=self.params['synaptic']['wCCe'],
-                                                       delays=self.params['synaptic']['dCCe']),
+            for presynaptic, postsynaptic in pairs_of_neighbours(population_ids,
+                                                                 window_size=self.params['topological']['radius_e']+1,
+                                                                 add_reciprocal=True):
+                pyNN.Projection(presynaptic_population=self._network['collectors'][presynaptic],
+                                postsynaptic_population=self._network['collectors'][postsynaptic],
+                                connector=pyNN.OneToOneConnector(weights=self.params['synaptic']['wCCe'],
+                                                                 delays=self.params['synaptic']['dCCe']),
                                 target='excitatory')
 
-        within_population_neuron_pairs = excite_neighbours(range(self.params['retina']['n_rows']))
+        # construct vertical connections within each neural population
+        within_population_neuron_pairs = pairs_of_neighbours(range(self.params['retina']['n_rows']),
+                                                             window_size=self.params['topological']['radius_e']+1,
+                                                             add_reciprocal=True)
         logger.debug("Within-population neuron pairs: {}".format(within_population_neuron_pairs))
 
         for population in self._network['collectors']:
@@ -275,3 +266,78 @@ class TemporalCoincidenceDetectionNetwork:
                             connector=pyNN.FromListConnector(within_population_neuron_pairs),
                             target='excitatory')
         logger.info("Applying the continuity constraint on the temporal coincidence network completed.")
+
+    def _apply_ordering_constraint(self):
+        """
+        Implement the proposed by Christoph ordering constraint of inhibiting possible matches of larger or smaller
+        disparities for neighbouring pixels. It can be thought of as a weaker version of the uniqueness constraint
+        applied to adjacent pixels (according to a specified radius)
+         
+        Returns:
+            In-place method
+        """
+        logger.info("Applying the ordering constraint on the temporal coincidence network.")
+
+        # each population in a row (in the network topology matrix) should be connected to all
+        # populations from the upper and lower rows. Analogoursly with the columns.
+        row_pairs = pairs_of_neighbours(xrange(self.params['retina']['n_cols']),
+                                        window_size=self.params['topological']['radius_o'] + 1,
+                                        add_reciprocal=False)
+
+        def inhibit_neighbours_along_eyesight(network_topology):
+            for row_src, row_dst in row_pairs:
+                # connect each population from the top row to all from the bottom (and vice versa)
+                for population_id in network_topology[row_src]:
+                    target_populations = network_topology[row_dst]
+                    for presynaptic, postsynaptic in zip([population_id] * len(target_populations), target_populations):
+                        pyNN.Projection(presynaptic_population=self._network['collectors'][presynaptic],
+                                        postsynaptic_population=self._network['collectors'][postsynaptic],
+                                        connector=pyNN.OneToOneConnector(weights=self.params['synaptic']['wCCo'],
+                                                                         delays=self.params['synaptic']['dCCo']),
+                                        target='inhibitory')
+                        # connect reciprocally too
+                        pyNN.Projection(presynaptic_population=self._network['collectors'][postsynaptic],
+                                        postsynaptic_population=self._network['collectors'][presynaptic],
+                                        connector=pyNN.OneToOneConnector(weights=self.params['synaptic']['wCCo'],
+                                                                         delays=self.params['synaptic']['dCCo']),
+                                        target='inhibitory')
+
+        inhibit_neighbours_along_eyesight(self._network_topology)
+        inhibit_neighbours_along_eyesight(self._network_topology.T)
+        logger.info("Applying the ordering constraint on the temporal coincidence network completed.")
+
+    def get_raw_output(self):
+        """
+        Get the spikes for each neuron and all populations.
+        
+        Returns:
+            A list of population spikes. In each population a neuron id and spiking timestamp are recorded. 
+            The population id corresponds to the index in the list.
+        """
+        spikes_per_population = [x.getSpikes() for x in self._network['collectors']]
+        return spikes_per_population
+
+    def get_output(self):
+        """
+        Return a the interpreted raw output (i.e. ocnverted to pixel coordinates and disparity values)
+
+        Returns:
+            A numpy array, representing the network activity
+        """
+        same_disparity_populations = (np.diagonal(self._network_topology, i)
+                                      for i in xrange(self.params['topology']['min_disparity'],
+                                                      -self.params['topology']['max_disparity'], -1))
+        id2pixel = {}
+        for i, population_group in enumerate(same_disparity_populations):
+            for pixel_id, population_id in enumerate(population_group):
+                id2pixel[population_id] = pixel_id + i
+
+        spikes_per_population = self.get_raw_output()
+        spikes_in_pixeldisp_space = {'ts': [], 'xs': [], 'ys': [], 'disps': []}
+        for population_id, spikes_in_population in enumerate(spikes_per_population):
+            for spike in spikes_in_population:
+                spikes_in_pixeldisp_space['ts'].append(spike[1])
+                spikes_in_pixeldisp_space['xs'].append(id2pixel[population_id])
+                spikes_in_pixeldisp_space['ys'].append(spike[0])
+
+        return spikes_in_pixeldisp_space
