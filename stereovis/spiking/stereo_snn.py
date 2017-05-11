@@ -18,3 +18,6 @@ class BasicCooperativeNetwork(CooperativeNetwork):
         CooperativeNetwork.__init__(self, spiking_inputs, operational_mode)
         self.network = TemporalCoincidenceDetectionNetwork(input_sources=self.retina_inputs, mode=operational_mode)
 
+    def get_output(self, time=None):
+        return self.network.get_output(time=time, dt=0.01)
+

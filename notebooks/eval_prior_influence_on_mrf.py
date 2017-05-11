@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import skimage.io as skio
 import skimage.feature as skft
 
-from utils.file_io import load_ground_truth
+from utils.frames_io import load_ground_truth
 from stereovis.framed.stereo_mrf import StereoMRF
 
 

@@ -10,9 +10,6 @@
 
 
 params:
-  - simulation:
-    - time_step: 0.2
-
   - neural:
     - tau_E: 2.0
     - tau_I': 2.0
@@ -40,6 +37,7 @@ params:
     - add_gating: False
     - add_continuity_constraint: True
     - add_uniqueness_constraint: True
+    - add_ordering_constraint: True
     - radius_e: 1     # continuity constraint
     - radius_o: 1     # ordering constraint
     - radius_i: 128   # uniqueness constraint

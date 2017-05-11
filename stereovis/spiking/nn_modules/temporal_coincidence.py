@@ -48,6 +48,8 @@ class TemporalCoincidenceDetectionNetwork:
             self._apply_uniqueness_constraint()
         if self.params['topological']['add_continuity_constraint']:
             self._apply_continuity_constraint()
+        if self.params['topological']['add_ordering_constraint']:
+            self._apply_ordering_constraint()
 
     def _create_network(self, record_spikes=False, add_gating=True):
         """
