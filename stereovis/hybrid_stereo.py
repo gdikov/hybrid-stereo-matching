@@ -43,7 +43,9 @@ class HybridStereoMatching:
         retina_left = create_retina(spikes['left'], label='retina_left')
         retina_right = create_retina(spikes['right'], label='retina_right')
         spiking_inputs = {'left': retina_left, 'right': retina_right}
-        self.snn = BasicCooperativeNetwork(spiking_inputs, self.config['mode'])
+        self.snn = BasicCooperativeNetwork(spiking_inputs,
+                                           experiment_config=self.config['input'],
+                                           operational_mode='offline')
         # self.mrf = StereoMRF()
         # self.frames = FrameManager()
 

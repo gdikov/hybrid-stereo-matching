@@ -7,7 +7,7 @@ from utils.spikes_io import SpikeParser
 
 class CooperativeNetwork:
     def __init__(self, spike_sources):
-        self.retina_inputs = {'left': spike_sources['left'], 'right': spike_sources['right']}
+        self.retina_inputs = spike_sources
 
     def get_output(self):
         """
@@ -52,9 +52,12 @@ class HierarchicalCooperativeNetwork(CooperativeNetwork):
 
 
 class BasicCooperativeNetwork(CooperativeNetwork):
-    def __init__(self, spiking_inputs, operational_mode):
+    def __init__(self, spiking_inputs, params=None, experiment_config=None, operational_mode='offline'):
         CooperativeNetwork.__init__(self, spiking_inputs)
-        self.network = TemporalCoincidenceDetectionNetwork(input_sources=self.retina_inputs, mode=operational_mode)
+        self.network = TemporalCoincidenceDetectionNetwork(input_sources=self.retina_inputs,
+                                                           network_params=params,
+                                                           experiment_params=experiment_config,
+                                                           mode=operational_mode)
 
     def get_output(self):
         return self.network.get_output()

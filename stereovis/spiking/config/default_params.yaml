@@ -10,10 +10,10 @@
 
 neuron:
   tau_E: 2.0
-  tau_I': 2.0
-  tau_mem': 2.07
-  v_reset_blocker': -84.0,
-  v_reset_collector': -90.0
+  tau_I: 2.0
+  tau_mem: 2.07
+  v_reset_blocker: -84.0,
+  v_reset_collector: -90.0
 
 synapse:
   wBC: 18.0  # although the parameter is inhibitory, it should be a positive real number
@@ -36,8 +36,4 @@ topology:
   add_continuity_constraint: True
   add_uniqueness_constraint: True
   add_ordering_constraint: True
-  radius_e: 1     # continuity constraint
-  radius_o: 1     # ordering constraint
-  radius_i: 128   # uniqueness constraint
-  min_disparity: 0
-  max_disparity: 10
+  radius_continuity: 1     # continuity constraint

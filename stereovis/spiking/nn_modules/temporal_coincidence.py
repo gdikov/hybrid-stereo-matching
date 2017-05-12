@@ -13,42 +13,45 @@ logger = logging.getLogger(__file__)
 
 
 class TemporalCoincidenceDetectionNetwork:
-    def __init__(self, input_sources=None, params=None, mode='offline'):
+    def __init__(self, input_sources=None, network_params=None, experiment_params=None, mode='offline'):
         """
         Args:
             input_sources: a dict of left and right view event inputs as SpikeSourceArrays 
-            params: filename of the parameter yaml file containing the neural and topological settings of the network
+            network_params: filename of the parameter yaml file containing 
+             the neural and topology settings of the network
+            experiment_params: configuration object containing the experiment-specific parameters
+             such as maximum and minimum disparity, retina resolution etc.
             mode: the operation mode. Can be `offline` or `online`.
         """
         path_to_params = os.path.join(os.path.abspath(os.path.dirname(__file__)), "..", "config")
-        if params is None:
+        if network_params is None:
             self.params = load_config(os.path.join(path_to_params, 'default_params.yaml'))
         else:
-            self.params = load_config(os.path.join(path_to_params, params + '_params.yaml'))
+            self.params = load_config(os.path.join(path_to_params, network_params + '_params.yaml'))
+        self.max_disparity = experiment_params['max_disparity']
+        self.min_disparity = experiment_params['min_disparity']
+        self.retina_n_cols = experiment_params['resolution'][0]
+        self.retina_n_rows = experiment_params['resolution'][1]
 
-        if self.params['topological']['min_disparity'] > 0:
+        if self.min_disparity > 0:
             logger.warning("Detected invalid minimum disparity of {}. "
                            "Reducing to 0, for larger values are not supported yet."
-                           .format(self.params['topological']['min_disparity']))
-            self.params['topological']['min_disparity'] = 0
+                           .format(self.min_disparity))
+            self.min_disparity = 0
 
-        disp_range = self.params['topological']['max_disparity'] - self.params['topological']['min_disparity']
-        self.size = (2 * (self.params['topological']['n_cols'] - self.params['topological']['min_disparity']) *
+        disp_range = self.max_disparity - self.min_disparity
+        self.size = (2 * (self.retina_n_cols - self.min_disparity) *
                      (disp_range + 1) - (disp_range + 1) ** 2 + disp_range + 1) / 2
 
-        if mode == 'offline':
-            self._network = self._create_network(record_spikes=True,
-                                                 add_gating=self.params['topological']['add_gating'])
-        else:
-            self._network = self._create_network(record_spikes=False,
-                                                 add_gating=self.params['topological']['add_gating'])
+        self._network = self._create_network(record_spikes=(mode == 'offline'),
+                                             add_gating=self.params['topology']['add_gating'])
 
         self._connect_spike_sources(input_sources=input_sources)
-        if self.params['topological']['add_uniqueness_constraint']:
+        if self.params['topology']['add_uniqueness_constraint']:
             self._apply_uniqueness_constraint()
-        if self.params['topological']['add_continuity_constraint']:
+        if self.params['topology']['add_continuity_constraint']:
             self._apply_continuity_constraint()
-        if self.params['topological']['add_ordering_constraint']:
+        if self.params['topology']['add_ordering_constraint']:
             self._apply_ordering_constraint()
 
     def _create_network(self, record_spikes=False, add_gating=True):
@@ -66,24 +69,24 @@ class TemporalCoincidenceDetectionNetwork:
         logger.info("Creating temporal coincidence detection network with {0} populations.".format(self.size))
 
         network = {'blockers': [], 'collectors': []}
-        for x in range(0, self.size):
+        for pop_id in xrange(self.size):
             if add_gating:
-                blocker_columns = pyNN.Population(self.params['topological']['n_rows'] * 2,
-                                                  pyNN.IF_curr_exp,
-                                                  {'tau_syn_E': self.params['neural']['tau_E'],
-                                                   'tau_syn_I': self.params['neural']['tau_I'],
-                                                   'tau_m': self.params['neural']['tau_mem'],
-                                                   'v_reset': self.params['neural']['v_reset_blocker']},
-                                                  label="Blocker {0}".format(x))
-                network['blockers'].append(blocker_columns)
+                blocker_column = pyNN.Population(self.retina_n_rows * 2,
+                                                 pyNN.IF_curr_exp,
+                                                 {'tau_syn_E': self.params['neuron']['tau_E'],
+                                                  'tau_syn_I': self.params['neuron']['tau_I'],
+                                                  'tau_m': self.params['neuron']['tau_mem'],
+                                                  'v_reset': self.params['neuron']['v_reset_blocker']},
+                                                 label="Blocker_{0}".format(pop_id))
+                network['blockers'].append(blocker_column)
 
-            collector_column = pyNN.Population(self.params['topological']['n_rows'],
+            collector_column = pyNN.Population(self.retina_n_rows,
                                                pyNN.IF_curr_exp,
-                                               {'tau_syn_E': self.params['neural']['tau_E'],
-                                                'tau_syn_I': self.params['neural']['tau_I'],
-                                                'tau_m': self.params['neural']['tau_mem'],
-                                                'v_reset': self.params['neural']['v_reset_collector']},
-                                               label="Collector {0}".format(x))
+                                               {'tau_syn_E': self.params['neuron']['tau_E'],
+                                                'tau_syn_I': self.params['neuron']['tau_I'],
+                                                'tau_m': self.params['neuron']['tau_mem'],
+                                                'v_reset': self.params['neuron']['v_reset_collector']},
+                                               label="Collector_{0}".format(pop_id))
             network['collectors'].append(collector_column)
 
             if record_spikes:
@@ -92,11 +95,30 @@ class TemporalCoincidenceDetectionNetwork:
         if add_gating:
             self._gate_neurons(network)
 
-        self._network_topology = \
-            sps.diags(np.split(np.arange(self.size),
-                               np.cumsum(np.arange(self.params['topological']['max_disparity'], 1, -1))),
-                      [-x for x in range(self.params['topological']['max_disparity'] + 1)], dtype=np.int).toarray()
+        # construct network topology by filling in the diagonal in a square matrix
+        #   * each diagonal represent the population ids which share the same disparity
+        #   * left retina pixels are attached to each network population from the top left to the bottom left
+        #       - i.e. a pixel excites all populations along a row in the matrix in which it lies too
+        #   * right retina pixels are attached from the top left to the top right
+        #       - i.e. a pixel excites populations along the column of the matrix to which it is tied.
+        #
+        # For example, a network connected to a retina with 4 columns and limited to maximum disparity of 2 would yield:
+        #
+        #   	   | R0  R1  R2  R3
+        #       -------------------
+        #       L0 | 0   .   .   .
+        #       L1 | 4   1   .   .
+        #       L2 | 7   5   2   .
+        #       L3 | .   8   6   3
+        #                 \   \   \
+        #                 d=2 d=1 d=0
+        self._network_topology = sps.diags(np.split(np.arange(self.size),
+                                                    np.cumsum(np.arange(self.retina_n_cols,
+                                                                        self.retina_n_cols - self.max_disparity, -1))),
+                                           -1 * np.arange(self.max_disparity + 1)).toarray().astype(np.int)
+        # invalidate entries which do not represent population ids and be careful with the 0th population
         self._network_topology[self._network_topology == 0] = -1
+        self._network_topology[0, 0] = 0
 
         return network
 
@@ -115,9 +137,9 @@ class TemporalCoincidenceDetectionNetwork:
         #   * neurons with id from 0 until the vertical retina resolution -1 (dy - 1) serve as the left blocking neurons
         #   * and neurons with id from dy to the end, i.e. 2dy - 1, serve as the right blocking neurons
         connection_list = []
-        for y in range(0, self.params['topological']['n_rows']):
+        for y in range(self.retina_n_rows):
             connection_list.append((y, y, self.params['synaptic']['wBC'], self.params['synaptic']['dBC']))
-            connection_list.append((y + self.params['topological']['n_rows'], y,
+            connection_list.append((y + self.retina_n_rows, y,
                                     self.params['synaptic']['wBC'], self.params['synaptic']['dBC']))
 
         logger.debug("Generated gating connection list: {}".format(connection_list))
@@ -138,19 +160,28 @@ class TemporalCoincidenceDetectionNetwork:
         """
         logger.info("Connecting spike sources to the temporal coincidence detection network initiated.")
 
-        add_blockers = 'blockers' in self._network.keys()
-        n_rows = self.params['topological']['n_rows']
+        add_blockers = len(self._network['blockers']) > 0
+        n_rows = self.retina_n_rows
         if add_blockers:
             # left is 0--dimensionRetinaY-1; right is dimensionRetinaY--dimensionRetinaY*2-1
-            syn_colateral = [(self.params['synaptic']['wSaB'], self.params['synaptic']['dSaB'])] * n_rows
-            syn_contralateral = [(self.params['synaptic']['wSzB'], self.params['synaptic']['dSzB'])] * n_rows
+            syn_colateral = [(self.params['synapse']['wSaB'], self.params['synapse']['dSaB'])] * n_rows
+            syn_contralateral = [(self.params['synapse']['wSzB'], self.params['synapse']['dSzB'])] * n_rows
             id_map = [(x, x) for x in range(n_rows)]
-            offset_map = [(x, x + self.params['topological']['n_rows']) for x in range(n_rows)]
+            offset_map = [(x, x + n_rows) for x in range(n_rows)]
             # unpack the tuples of tuples to tuples of flattened elements
-            ret_l_block_l = [(x[0][0], x[0][1], x[1][0], x[1][1]) for x in zip(id_map, syn_colateral)]
-            ret_l_block_r = [(x[0][0], x[0][1], x[1][0], x[1][1]) for x in zip(offset_map, syn_contralateral)]
-            ret_r_block_l = [(x[0][0], x[0][1], x[1][0], x[1][1]) for x in zip(id_map, syn_contralateral)]
-            ret_r_block_r = [(x[0][0], x[0][1], x[1][0], x[1][1]) for x in zip(offset_map, syn_colateral)]
+            # NOTE: ret_l_block_l is identical to rel_r_block_l and ret_r_block_r is identical to ret_l_block_r
+            # if and only if the contra-lateral and co-lateral synapses have the same weights and delays.
+            if self.params['synapse']['wSaB'] == self.params['synapse']['wSzB'] and \
+               self.params['synapse']['dSaB'] == self.params['synapse']['dSzB']:
+                ret_l_block_l = [(x[0][0], x[0][1], x[1][0], x[1][1]) for x in zip(id_map, syn_colateral)]
+                ret_l_block_r = [(x[0][0], x[0][1], x[1][0], x[1][1]) for x in zip(offset_map, syn_contralateral)]
+                ret_r_block_l = ret_l_block_l
+                ret_r_block_r = ret_l_block_r
+            else:
+                ret_l_block_l = [(x[0][0], x[0][1], x[1][0], x[1][1]) for x in zip(id_map, syn_colateral)]
+                ret_l_block_r = [(x[0][0], x[0][1], x[1][0], x[1][1]) for x in zip(offset_map, syn_contralateral)]
+                ret_r_block_l = [(x[0][0], x[0][1], x[1][0], x[1][1]) for x in zip(id_map, syn_contralateral)]
+                ret_r_block_r = [(x[0][0], x[0][1], x[1][0], x[1][1]) for x in zip(offset_map, syn_colateral)]
             logger.debug("Generated connection list from left retina to left blockers: {}".format(ret_l_block_l))
             logger.debug("Generated connection list from left retina to right blockers: {}".format(ret_l_block_r))
             logger.debug("Generated connection list from right retina to right blockers: {}".format(ret_r_block_r))
@@ -170,8 +201,8 @@ class TemporalCoincidenceDetectionNetwork:
                 for population_id in row[row >= 0]:
                     pyNN.Projection(presynaptic_population=retina[pixel_id],
                                     postsynaptic_population=self._network['collectors'][population_id],
-                                    connector=pyNN.OneToOneConnector(weights=self.params['synaptic']['wSC'],
-                                                                     delays=self.params['synaptic']['dSC']),
+                                    connector=pyNN.OneToOneConnector(weights=self.params['synapse']['wSC'],
+                                                                     delays=self.params['synapse']['dSC']),
                                     target='excitatory')
                     if block_l is not None and block_r is not None:
                         pyNN.Projection(presynaptic_population=retina[pixel_id],
@@ -198,12 +229,6 @@ class TemporalCoincidenceDetectionNetwork:
         """
         logger.info("Applying the uniqueness constraint on the temporal coincidence network.")
 
-        if self.params['topological']['radius_i'] < self.params['retina']['n_cols']:
-            new_radius = self.params['retina']['n_cols']
-            logger.warning("Radius of inhibition was too small! Uniquness constraint cannot be satisfied. "
-                           "Setting radius to {}".format(new_radius))
-            self.params['topological']['radius_i'] = new_radius
-
         def inhibit_along_eyesight(network_topology):
             for population_ids in network_topology:
                 # generate population id pairs from all populations lying along the projection axis
@@ -212,8 +237,8 @@ class TemporalCoincidenceDetectionNetwork:
                 for presynaptic, postsynaptic in pairs:
                     pyNN.Projection(presynaptic_population=self._network['collectors'][presynaptic],
                                     postsynaptic_population=self._network['collectors'][postsynaptic],
-                                    connector=pyNN.OneToOneConnector(weights=self.params['synaptic']['wCCi'],
-                                                                     delays=self.params['synaptic']['dCCi']),
+                                    connector=pyNN.OneToOneConnector(weights=self.params['synapse']['wCCi'],
+                                                                     delays=self.params['synapse']['dCCi']),
                                     target='inhibitory')
 
         # connect for inhibition for the left retina
@@ -236,30 +261,30 @@ class TemporalCoincidenceDetectionNetwork:
                        "i.e. a neuron will excite only neurons to the left, right, top and bottom. "
                        "This may be improved in the future.")
 
-        if self.params['topological']['radius_e'] > self.params['retina']['n_cols']:
+        if self.params['topology']['radius_continuity'] > self.retina_n_cols:
             new_radius = 1
             logger.warning("Radius of excitation is too big. Setting radius to {}".format(new_radius))
-            self.params['topological']['radius_e'] = new_radius
+            self.params['topology']['radius_continuity'] = new_radius
 
         same_disparity_populations = (np.diagonal(self._network_topology, i)
-                                      for i in xrange(self.params['topology']['min_disparity'],
-                                                      -self.params['topology']['max_disparity'], -1))
+                                      for i in xrange(self.min_disparity,
+                                                      -self.max_disparity, -1))
         logger.debug("Same-disparity population ids: {}".format(same_disparity_populations))
 
         # iterate over population or neural ids and construct pairs from neighbouring units
         for population_ids in same_disparity_populations:
             for presynaptic, postsynaptic in pairs_of_neighbours(population_ids,
-                                                                 window_size=self.params['topological']['radius_e']+1,
+                                                                 window_size=self.params['topology']['radius_continuity']+1,
                                                                  add_reciprocal=True):
                 pyNN.Projection(presynaptic_population=self._network['collectors'][presynaptic],
                                 postsynaptic_population=self._network['collectors'][postsynaptic],
-                                connector=pyNN.OneToOneConnector(weights=self.params['synaptic']['wCCe'],
-                                                                 delays=self.params['synaptic']['dCCe']),
+                                connector=pyNN.OneToOneConnector(weights=self.params['synapse']['wCCe'],
+                                                                 delays=self.params['synapse']['dCCe']),
                                 target='excitatory')
 
         # construct vertical connections within each neural population
-        within_population_neuron_pairs = pairs_of_neighbours(range(self.params['retina']['n_rows']),
-                                                             window_size=self.params['topological']['radius_e']+1,
+        within_population_neuron_pairs = pairs_of_neighbours(range(self.retina_n_rows),
+                                                             window_size=self.params['topology']['radius_continuity']+1,
                                                              add_reciprocal=True)
         logger.debug("Within-population neuron pairs: {}".format(within_population_neuron_pairs))
 
@@ -282,8 +307,8 @@ class TemporalCoincidenceDetectionNetwork:
 
         # each population in a row (in the network topology matrix) should be connected to all
         # populations from the upper and lower rows. Analogoursly with the columns.
-        row_pairs = pairs_of_neighbours(xrange(self.params['retina']['n_cols']),
-                                        window_size=self.params['topological']['radius_o'] + 1,
+        row_pairs = pairs_of_neighbours(xrange(self.retina_n_cols),
+                                        window_size=self.params['topology']['radius_o'] + 1,
                                         add_reciprocal=False)
 
         def inhibit_neighbours_along_eyesight(network_topology):
@@ -294,14 +319,14 @@ class TemporalCoincidenceDetectionNetwork:
                     for presynaptic, postsynaptic in zip([population_id] * len(target_populations), target_populations):
                         pyNN.Projection(presynaptic_population=self._network['collectors'][presynaptic],
                                         postsynaptic_population=self._network['collectors'][postsynaptic],
-                                        connector=pyNN.OneToOneConnector(weights=self.params['synaptic']['wCCo'],
-                                                                         delays=self.params['synaptic']['dCCo']),
+                                        connector=pyNN.OneToOneConnector(weights=self.params['synapse']['wCCo'],
+                                                                         delays=self.params['synapse']['dCCo']),
                                         target='inhibitory')
                         # connect reciprocally too
                         pyNN.Projection(presynaptic_population=self._network['collectors'][postsynaptic],
                                         postsynaptic_population=self._network['collectors'][presynaptic],
-                                        connector=pyNN.OneToOneConnector(weights=self.params['synaptic']['wCCo'],
-                                                                         delays=self.params['synaptic']['dCCo']),
+                                        connector=pyNN.OneToOneConnector(weights=self.params['synapse']['wCCo'],
+                                                                         delays=self.params['synapse']['dCCo']),
                                         target='inhibitory')
 
         inhibit_neighbours_along_eyesight(self._network_topology)
@@ -327,8 +352,7 @@ class TemporalCoincidenceDetectionNetwork:
             A numpy array, representing the network activity
         """
         same_disparity_populations = (np.diagonal(self._network_topology, i)
-                                      for i in xrange(self.params['topology']['min_disparity'],
-                                                      -self.params['topology']['max_disparity'], -1))
+                                      for i in xrange(self.min_disparity, -self.max_disparity, -1))
         id2pixel = {}
         for i, population_group in enumerate(same_disparity_populations):
             for pixel_id, population_id in enumerate(population_group):
