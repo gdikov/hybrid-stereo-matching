@@ -7,13 +7,6 @@ from utils.spikes_io import SpikeParser
 
 class CooperativeNetwork:
     def __init__(self, spike_sources):
-        # setup timestep of simulation and minimum and maximum synaptic delays
-        simulation_time_step = 0.2
-        pyNN.setup(timestep=simulation_time_step,
-                   min_delay=simulation_time_step,
-                   max_delay=10 * simulation_time_step,
-                   n_chips_required=6,
-                   threads=4)
         self.retina_inputs = {'left': spike_sources['left'], 'right': spike_sources['right']}
 
     def get_output(self):

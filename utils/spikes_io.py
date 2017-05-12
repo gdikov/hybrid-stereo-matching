@@ -182,4 +182,8 @@ def load_spikes(input_file, crop_region=None, resolution=None, simulation_time=N
         for neuron_id in xrange(n_rows):
             retina_spikes['left'][population_id][neuron_id].append(max_t)
             retina_spikes['right'][population_id][neuron_id].append(max_t)
+    # each row encodes a column population, don't transpose it because it is easier to
+    # iterate over rows (needed in Retina spike times initialisation)
+    retina_spikes['left'] = np.asarray(retina_spikes['left'])
+    retina_spikes['right'] = np.asarray(retina_spikes['right'])
     return retina_spikes

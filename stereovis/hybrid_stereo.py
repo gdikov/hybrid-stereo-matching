@@ -1,5 +1,6 @@
+import spynnaker.pyNN as pyNN
 from spiking.stereo_snn import BasicCooperativeNetwork
-from spiking.nn_modules.spike_source import Retina
+from spiking.nn_modules.spike_source import create_retina
 from framed.stereo_mrf import StereoMRF
 from framed.frame_manager import FrameManager
 
@@ -28,16 +29,20 @@ class HybridStereoMatching:
         Returns:
             In-place method
         """
-
-        if self.config['mode'] == 'offline':
-            spikes = load_spikes(input_file=self.config['input']['path'],
-                                 resolution=self.config['input']['resolution'],
-                                 crop_region=self.config['input']['crop'],
-                                 simulation_time=self.config['simulation']['duration'], timestep_unit='us', dt_thresh=1)
-            spiking_inputs = {'left': Retina(spike_times=spikes['left']), 'right': Retina(spike_times=spikes['right'])}
-        else:
-            logger.error("Online mode of operation is not supported yet. Rerun in `offline` mode.")
-            raise NotImplementedError
+        # setup timestep of simulation and minimum and maximum synaptic delays
+        simulation_time_step = 0.2
+        pyNN.setup(timestep=simulation_time_step,
+                   min_delay=simulation_time_step,
+                   max_delay=10 * simulation_time_step,
+                   n_chips_required=6,
+                   threads=4)
+        spikes = load_spikes(input_file=self.config['input']['path'],
+                             resolution=self.config['input']['resolution'],
+                             crop_region=self.config['input']['crop'],
+                             simulation_time=self.config['simulation']['duration'], timestep_unit='us', dt_thresh=1)
+        retina_left = create_retina(spikes['left'], label='retina_left')
+        retina_right = create_retina(spikes['right'], label='retina_right')
+        spiking_inputs = {'left': retina_left, 'right': retina_right}
         self.snn = BasicCooperativeNetwork(spiking_inputs, self.config['mode'])
         # self.mrf = StereoMRF()
         # self.frames = FrameManager()
@@ -49,5 +54,4 @@ class HybridStereoMatching:
         Returns:
 
         """
-        if self.config['mode'] == 'offline':
-            self.snn.run(self.config['simulation']['duration'])
+        self.snn.run(self.config['simulation']['duration'])
