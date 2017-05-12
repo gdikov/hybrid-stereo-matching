@@ -3,7 +3,7 @@ import logging
 
 import spynnaker.pyNN as pyNN
 
-from utils.params import load_params
+from utils.config import load_config
 
 logger = logging.getLogger(__file__)
 
@@ -13,9 +13,9 @@ class Retina(object):
 
         path_to_params = os.path.join(os.path.abspath(os.path.dirname(__file__)), "..", "config")
         if params is None:
-            self.params = load_params(os.path.join(path_to_params, 'default_params.yaml'))
+            self.params = load_config(os.path.join(path_to_params, 'default_params.yaml'))
         else:
-            self.params = load_params(os.path.join(path_to_params, params + '_params.yaml'))
+            self.params = load_config(os.path.join(path_to_params, params + '_params.yaml'))
 
         if len(spike_times) >= self.params['retina']['n_cols'] or \
            len(spike_times[0]) >= self.params['retina']['n_cols']:

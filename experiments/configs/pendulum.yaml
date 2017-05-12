@@ -1,0 +1,18 @@
+
+# the general information is used for the experiment logging
+general:
+  name: Pendulum
+  authors: Christoph, Georgi
+
+# input related configuration
+input:
+  path: ../data/spiking/pendulum.npz
+  crop: !!python/tuple [32, 22]         # offset from the vertical and the horizontal border (top left pixel coordinate)
+  resolution: !!python/tuple [72, 84]   # in pixels, first is resolution along x (horizontal) axis and then y axis
+  max_disparity: 42                     # maximum detectable disparity.
+
+# simulation related configuration
+simulation:
+  duration: 10000     # time in ms
+  time_step: 0.2      # time in ms
+  n_chips:  6         # each has 850 cores

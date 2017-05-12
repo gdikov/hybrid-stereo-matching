@@ -6,7 +6,7 @@ import scipy.sparse as sps
 import itertools as it
 import spynnaker.pyNN as pyNN
 
-from utils.params import load_params
+from utils.config import load_config
 from utils.helpers import pairs_of_neighbours
 
 logger = logging.getLogger(__file__)
@@ -22,9 +22,9 @@ class TemporalCoincidenceDetectionNetwork:
         """
         path_to_params = os.path.join(os.path.abspath(os.path.dirname(__file__)), "..", "config")
         if params is None:
-            self.params = load_params(os.path.join(path_to_params, 'default_params.yaml'))
+            self.params = load_config(os.path.join(path_to_params, 'default_params.yaml'))
         else:
-            self.params = load_params(os.path.join(path_to_params, params + '_params.yaml'))
+            self.params = load_config(os.path.join(path_to_params, params + '_params.yaml'))
 
         if self.params['topological']['min_disparity'] > 0:
             logger.warning("Detected invalid minimum disparity of {}. "
@@ -92,10 +92,10 @@ class TemporalCoincidenceDetectionNetwork:
         if add_gating:
             self._gate_neurons(network)
 
-        self._network_topology = sps.diags([np.arange(k, k + self.params['topological']['n_cols'] - x)
-                                            for x, k in enumerate(range(self.params['topological']['max_disparity']))],
-                                           [-x for x in range(self.params['topological']['max_disparity'])],
-                                           dtype=np.int).todense()
+        self._network_topology = \
+            sps.diags(np.split(np.arange(self.size),
+                               np.cumsum(np.arange(self.params['topological']['max_disparity'], 1, -1))),
+                      [-x for x in range(self.params['topological']['max_disparity'] + 1)], dtype=np.int).toarray()
         self._network_topology[self._network_topology == 0] = -1
 
         return network
