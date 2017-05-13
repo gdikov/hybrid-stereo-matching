@@ -132,7 +132,7 @@ class TemporalCoincidenceDetectionNetwork:
         Returns:
             In-place method
         """
-        logger.info("Gating blocker and collector populations initiated.")
+        logger.info("Gating blocker and collector populations.")
         # generate connection lists as follows:
         #   * neurons with id from 0 until the vertical retina resolution -1 (dy - 1) serve as the left blocking neurons
         #   * and neurons with id from dy to the end, i.e. 2dy - 1, serve as the right blocking neurons
@@ -146,7 +146,7 @@ class TemporalCoincidenceDetectionNetwork:
         # connect the inhibitory neurons (blockers) to the cell output (collector) neurons
         for blockers, collectors in zip(network['blockers'], network['collectors']):
             pyNN.Projection(blockers, collectors, pyNN.FromListConnector(connection_list), target='inhibitory')
-        logger.info("Gating blocker and collector populations completed.")
+        logger.debug("Gating blocker and collector populations completed.")
 
     def _connect_spike_sources(self, input_sources=None):
         """
@@ -158,7 +158,7 @@ class TemporalCoincidenceDetectionNetwork:
         Returns:
             In-place method
         """
-        logger.info("Connecting spike sources to the temporal coincidence detection network initiated.")
+        logger.info("Connecting spike sources to the temporal coincidence detection network.")
 
         add_blockers = len(self._network['blockers']) > 0
         n_rows = self.retina_n_rows
@@ -216,7 +216,7 @@ class TemporalCoincidenceDetectionNetwork:
 
         connect_retina(retina_left, self._network_topology, ret_l_block_l, ret_l_block_r)
         connect_retina(retina_right, self._network_topology.T, ret_r_block_l, ret_r_block_r)
-        logger.info("Connecting spike sources to the temporal coincidence detection network completed.")
+        logger.debug("Connecting spike sources to the temporal coincidence detection network completed.")
 
     def _apply_uniqueness_constraint(self):
         """
@@ -232,7 +232,7 @@ class TemporalCoincidenceDetectionNetwork:
         def inhibit_along_eyesight(network_topology):
             for population_ids in network_topology:
                 # generate population id pairs from all populations lying along the projection axis
-                pairs = filter(lambda x: x[0] != x[1], it.product(population_ids, repeat=2))
+                pairs = filter(lambda x: x[0] != x[1], it.product(population_ids[population_ids >= 0], repeat=2))
                 logger.debug("Generated inhibitory connection list for populations {}".format(pairs))
                 for presynaptic, postsynaptic in pairs:
                     pyNN.Projection(presynaptic_population=self._network['collectors'][presynaptic],
@@ -245,7 +245,7 @@ class TemporalCoincidenceDetectionNetwork:
         inhibit_along_eyesight(self._network_topology)
         # and for the right
         inhibit_along_eyesight(self._network_topology.T)
-        logger.info("Applying the uniqueness constraint on the temporal coincidence network completed.")
+        logger.debug("Applying the uniqueness constraint on the temporal coincidence network completed.")
 
     def _apply_continuity_constraint(self):
         """
@@ -258,17 +258,15 @@ class TemporalCoincidenceDetectionNetwork:
         """
         logger.info("Applying the continuity constraint on the temporal coincidence network.")
         logger.warning("The current implementation supports only cross-like connection patterns, "
-                       "i.e. a neuron will excite only neurons to the left, right, top and bottom. "
-                       "This may be improved in the future.")
+                       "i.e. a neuron will excite only neurons to the left, right, top and bottom. ")
 
         if self.params['topology']['radius_continuity'] > self.retina_n_cols:
             new_radius = 1
             logger.warning("Radius of excitation is too big. Setting radius to {}".format(new_radius))
             self.params['topology']['radius_continuity'] = new_radius
 
-        same_disparity_populations = (np.diagonal(self._network_topology, i)
-                                      for i in xrange(self.min_disparity,
-                                                      -self.max_disparity, -1))
+        same_disparity_populations = [np.diagonal(self._network_topology, i) for i in xrange(self.min_disparity,
+                                                                                             -self.max_disparity-1, -1)]
         logger.debug("Same-disparity population ids: {}".format(same_disparity_populations))
 
         # iterate over population or neural ids and construct pairs from neighbouring units
@@ -288,50 +286,37 @@ class TemporalCoincidenceDetectionNetwork:
                                                              add_reciprocal=True)
         logger.debug("Within-population neuron pairs: {}".format(within_population_neuron_pairs))
 
+        connection_list = [(src, dst, self.params['synapse']['wCCe'], self.params['synapse']['dCCe'])
+                           for src, dst in within_population_neuron_pairs]
         for population in self._network['collectors']:
             pyNN.Projection(presynaptic_population=population, postsynaptic_population=population,
-                            connector=pyNN.FromListConnector(within_population_neuron_pairs),
+                            connector=pyNN.FromListConnector(connection_list),
                             target='excitatory')
-        logger.info("Applying the continuity constraint on the temporal coincidence network completed.")
+        logger.debug("Applying the continuity constraint on the temporal coincidence network completed.")
 
     def _apply_ordering_constraint(self):
         """
-        Implement the proposed by Christoph ordering constraint of inhibiting possible matches of larger or smaller
-        disparities for neighbouring pixels. It can be thought of as a weaker version of the uniqueness constraint
-        applied to adjacent pixels (according to a specified radius)
+        Implement the proposed by Christoph ordering constraint of inhibiting possible *mirror* matches. 
+        For example: | |a|b|c| - | |1|2|3|  -->  (a,3), (b,2), (c,1) could be sometimes prevented if (b,2)
+        would inhibit (a,1) and (c,3) event types. These lie on the flipped diagonal of each population id.
          
         Returns:
             In-place method
         """
         logger.info("Applying the ordering constraint on the temporal coincidence network.")
 
-        # each population in a row (in the network topology matrix) should be connected to all
-        # populations from the upper and lower rows. Analogoursly with the columns.
-        row_pairs = pairs_of_neighbours(xrange(self.retina_n_cols),
-                                        window_size=self.params['topology']['radius_o'] + 1,
-                                        add_reciprocal=False)
-
-        def inhibit_neighbours_along_eyesight(network_topology):
-            for row_src, row_dst in row_pairs:
-                # connect each population from the top row to all from the bottom (and vice versa)
-                for population_id in network_topology[row_src]:
-                    target_populations = network_topology[row_dst]
-                    for presynaptic, postsynaptic in zip([population_id] * len(target_populations), target_populations):
-                        pyNN.Projection(presynaptic_population=self._network['collectors'][presynaptic],
-                                        postsynaptic_population=self._network['collectors'][postsynaptic],
-                                        connector=pyNN.OneToOneConnector(weights=self.params['synapse']['wCCo'],
-                                                                         delays=self.params['synapse']['dCCo']),
-                                        target='inhibitory')
-                        # connect reciprocally too
-                        pyNN.Projection(presynaptic_population=self._network['collectors'][postsynaptic],
-                                        postsynaptic_population=self._network['collectors'][presynaptic],
-                                        connector=pyNN.OneToOneConnector(weights=self.params['synapse']['wCCo'],
-                                                                         delays=self.params['synapse']['dCCo']),
-                                        target='inhibitory')
-
-        inhibit_neighbours_along_eyesight(self._network_topology)
-        inhibit_neighbours_along_eyesight(self._network_topology.T)
-        logger.info("Applying the ordering constraint on the temporal coincidence network completed.")
+        # get all flipped diagonal population groups
+        all_mirrored_diags = [self._network_topology[::-1, :].diagonal(i) for i in xrange(-self.max_disparity - 1,
+                                                                                          self.max_disparity + 2)]
+        valid_mirrored_diags = [group for group in [d[d >= 0] for d in all_mirrored_diags] if len(group) > 1]
+        for pair in valid_mirrored_diags:
+            for presynaptic, postsynaptic in filter(lambda x: x[0] != x[1], it.product(pair, repeat=2)):
+                pyNN.Projection(presynaptic_population=self._network['collectors'][presynaptic],
+                                postsynaptic_population=self._network['collectors'][postsynaptic],
+                                connector=pyNN.OneToOneConnector(weights=self.params['synapse']['wCCo'],
+                                                                 delays=self.params['synapse']['dCCo']),
+                                target='inhibitory')
+        logger.debug("Applying the ordering constraint on the temporal coincidence network completed.")
 
     def get_raw_output(self):
         """
