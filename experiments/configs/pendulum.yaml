@@ -1,13 +1,14 @@
 # the general information is used for the experiment logging
 general:
   name: Pendulum
+  output_dir: ../data/output
 
 # input related configuration
 input:
   path: ../data/spiking/pendulum_left_30cm_2.tsv.npz
-  crop: !!python/tuple [52, 72]         # offset from the vertical and the horizontal border (top left pixel coordinate) [32, 22]
-  resolution: !!python/tuple [4, 4]   # in pixels, first is resolution along x (horizontal) axis and then y axis [72, 84]
-  max_disparity: 2                      # maximum detectable disparity. 42
+  crop: !!python/tuple [32, 22]         # offset from the vertical and the horizontal border (top left pixel coordinate)  [52, 72]
+  resolution: !!python/tuple [72, 84]   # in pixels, first is resolution along x (horizontal) axis and then y axis [4, 4]
+  max_disparity: 42                     # maximum detectable disparity. 42 2
   min_disparity: 0
 
 # simulation related configuration

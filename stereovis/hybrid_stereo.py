@@ -4,7 +4,7 @@ from spiking.nn_modules.spike_source import create_retina
 from framed.stereo_mrf import StereoMRF
 from framed.frame_manager import FrameManager
 
-from utils.spikes_io import load_spikes
+from utils.spikes_io import load_spikes, save_spikes
 from utils.config import load_config
 
 import logging
@@ -57,3 +57,8 @@ class HybridStereoMatching:
 
         """
         self.snn.run(self.config['simulation']['duration'])
+        self.collect_output()
+
+    def collect_output(self):
+        disparities = self.snn.get_output()
+        save_spikes(self.config['general'], disparities)

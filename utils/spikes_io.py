@@ -3,6 +3,8 @@ import re
 import contextlib
 import os
 import numpy as np
+import cPickle
+from datetime import datetime as dt
 
 
 class SpikeParser:
@@ -187,3 +189,24 @@ def load_spikes(input_file, crop_region=None, resolution=None, simulation_time=N
     retina_spikes['left'] = np.asarray(retina_spikes['left'])
     retina_spikes['right'] = np.asarray(retina_spikes['right'])
     return retina_spikes
+
+
+def save_spikes(config_output, spikes):
+    """
+    Save the spikes to a pickle file. 
+    
+    Args:
+        config_output: a configuration object containing the output directory and the experiment name
+        spikes: a dict containing the spikes with pixel coordinates, disparity values and timestamps
+
+    Returns:
+        The full path to the pickled object
+    """
+    output_folder_path = config_output['output_dir']
+    if not os.path.exists(output_folder_path):
+        os.makedirs(output_folder_path)
+    timestamp = str(dt.now().isoformat())
+    filename = os.path.join(output_folder_path, config_output['name'] + "_tcd-out_" + timestamp + ".pickle")
+    with open(filename, 'wb') as f:
+        cPickle.dump(spikes, f)
+    return filename

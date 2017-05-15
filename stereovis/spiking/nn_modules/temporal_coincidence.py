@@ -120,6 +120,17 @@ class TemporalCoincidenceDetectionNetwork:
         self._network_topology[self._network_topology == 0] = -1
         self._network_topology[0, 0] = 0
 
+        # pre-compute some useful population mappings and sets which are used in the neural connections for
+        # some of the constraints and the interpreting of the output spikes in the get_output() method.
+        self._same_disparity_populations = (np.diagonal(self._network_topology, i)
+                                            for i in xrange(self.min_disparity, -self.max_disparity, -1))
+        self._id2pixel = [0] * self.size
+        self._id2disparity = [0] * self.size
+        for i, population_group in enumerate(self._same_disparity_populations):
+            for pixel_id, population_id in enumerate(population_group):
+                self._id2pixel[population_id] = pixel_id + i
+                self._id2disparity[population_id] = i
+
         return network
 
     def _gate_neurons(self, network):
@@ -265,12 +276,10 @@ class TemporalCoincidenceDetectionNetwork:
             logger.warning("Radius of excitation is too big. Setting radius to {}".format(new_radius))
             self.params['topology']['radius_continuity'] = new_radius
 
-        same_disparity_populations = [np.diagonal(self._network_topology, i) for i in xrange(self.min_disparity,
-                                                                                             -self.max_disparity-1, -1)]
-        logger.debug("Same-disparity population ids: {}".format(same_disparity_populations))
+        logger.debug("Same-disparity population ids: {}".format(list(self._same_disparity_populations)))
 
         # iterate over population or neural ids and construct pairs from neighbouring units
-        for population_ids in same_disparity_populations:
+        for population_ids in self._same_disparity_populations:
             for presynaptic, postsynaptic in pairs_of_neighbours(population_ids,
                                                                  window_size=self.params['topology']['radius_continuity']+1,
                                                                  add_reciprocal=True):
@@ -336,19 +345,14 @@ class TemporalCoincidenceDetectionNetwork:
         Returns:
             A numpy array, representing the network activity
         """
-        same_disparity_populations = (np.diagonal(self._network_topology, i)
-                                      for i in xrange(self.min_disparity, -self.max_disparity, -1))
-        id2pixel = {}
-        for i, population_group in enumerate(same_disparity_populations):
-            for pixel_id, population_id in enumerate(population_group):
-                id2pixel[population_id] = pixel_id + i
 
         spikes_per_population = self.get_raw_output()
         spikes_in_pixeldisp_space = {'ts': [], 'xs': [], 'ys': [], 'disps': []}
         for population_id, spikes_in_population in enumerate(spikes_per_population):
             for spike in spikes_in_population:
                 spikes_in_pixeldisp_space['ts'].append(spike[1])
-                spikes_in_pixeldisp_space['xs'].append(id2pixel[population_id])
-                spikes_in_pixeldisp_space['ys'].append(spike[0])
+                spikes_in_pixeldisp_space['xs'].append(self._id2pixel[population_id])
+                spikes_in_pixeldisp_space['ys'].append(int(spike[0]))
+                spikes_in_pixeldisp_space['disps'].append(self._id2disparity[population_id])
 
         return spikes_in_pixeldisp_space
