@@ -45,12 +45,15 @@ class CooperativeNetwork:
         pyNN.end()
 
 
-
 class HierarchicalCooperativeNetwork(CooperativeNetwork):
-    def __init__(self):
-        CooperativeNetwork.__init__(self)
-        self.temporal_net = TemporalCoincidenceDetectionNetwork(input_sources=self.retina_inputs)
+    def __init__(self, spiking_inputs, params=None, experiment_config=None, operational_mode='offline'):
+        CooperativeNetwork.__init__(self, spiking_inputs)
+        self.temporal_net = TemporalCoincidenceDetectionNetwork(input_sources=self.retina_inputs,
+                                                                network_params=params,
+                                                                experiment_params=experiment_config,
+                                                                mode=operational_mode)
         # TODO: init the fusion network
+        raise NotImplementedError("Fusion Network is not supported yet.")
 
 
 class BasicCooperativeNetwork(CooperativeNetwork):

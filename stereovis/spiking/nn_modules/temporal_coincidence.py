@@ -350,8 +350,8 @@ class TemporalCoincidenceDetectionNetwork:
         """
 
         spikes_per_population = self.get_raw_output()
-        logger.debug("Converting raw temporal coincidence network output to timestamped "
-                     "pixel coordinates and disparities events.")
+        logger.debug("Fetching and converting raw temporal coincidence network output "
+                     "to timestamped pixel coordinates and disparities events.")
         spikes_in_pixeldisp_space = {'ts': [], 'xs': [], 'ys': [], 'disps': []}
         for population_id, spikes_in_population in enumerate(spikes_per_population):
             for spike in spikes_in_population:

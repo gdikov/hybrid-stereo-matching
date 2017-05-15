@@ -1,6 +1,6 @@
 import re
 import numpy as np
-import struct
+
 
 
 def load_ground_truth(filename):
@@ -50,7 +50,10 @@ def load_ground_truth(filename):
     else:
         raise ValueError("Unknown file type")
 
-if __name__ == '__main__':
 
-    ground_truth = load_ground_truth("../experiments/tsuk_gt.pgm")
-    print(ground_truth)
+def load_frames():
+    pass
+
+
+def save_frames():
+    pass

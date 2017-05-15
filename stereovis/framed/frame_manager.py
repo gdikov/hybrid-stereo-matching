@@ -45,8 +45,6 @@ class FrameManager:
         frames_right = sorted([(os.path.splitext(os.path.basename(image))[0], skio.imread(image, as_grey=True))
                               for image in self.image_paths['right']], key=lambda x: x[0])
 
-
-
         for i in xrange(len(frames_left)):
             timestamp_left = int(frames_left[i][0])
             timestamp_right = int(frames_right[i][0])

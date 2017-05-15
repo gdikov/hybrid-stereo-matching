@@ -2,18 +2,24 @@
 general:
   name: Pendulum
   output_dir: /home/gdikov/StereoVision/SemiframelessStereoMatching/data/output
+  mode: offline
+  eventbased_algorithm: tcd               # Temporal Coincidence Network `tcd` or Hierarchical Network `hn`
+  framebased_algorithm: none              # Markov Random Field `mrf` or `none` for event-based matching only
+  network_params: default                 # will load stereovis/spiking/config/default_params.yaml
+                                          # for neural, synaptic and topological parameters
 
 # input related configuration
 input:
-  path: /home/gdikov/StereoVision/SemiframelessStereoMatching/data/spiking/pendulum_left_30cm_2.tsv.npz
-  crop: !!python/tuple [32, 22]         # offset from the vertical and the horizontal border (top left pixel coordinate)  [52, 72]
-  resolution: !!python/tuple [72, 84]   # in pixels, first is resolution along x (horizontal) axis and then y axis [4, 4]
-  max_disparity: 42                     # maximum detectable disparity. 42 2
+  spikes_path: /home/gdikov/StereoVision/SemiframelessStereoMatching/data/input/spikes/pendulum_left_30cm_2.tsv.npz
+  frames_path: none
+  crop: !!python/tuple [32, 22]         # offset from the vertical and the horizontal border (top left pixel coordinate)
+  resolution: !!python/tuple [72, 84]   # in pixels, first is resolution along x (horizontal) axis and then y axis
+  max_disparity: 42                     # maximum detectable disparity.
   min_disparity: 0
   timestamp_unit: us
 
 # simulation related configuration
 simulation:
   duration: 10000     # time in ms
-  time_step: 0.2      # time in ms
+  timestep: 0.2       # time in ms
   n_chips:  6         # each has 850 cores
