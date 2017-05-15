@@ -1,8 +1,10 @@
 import spynnaker.pyNN as pyNN
 from nn_modules.temporal_coincidence import TemporalCoincidenceDetectionNetwork
-from nn_modules.spatial_constraints import EventFrameFusionNetwork
-from nn_modules.spike_source import Retina
-from utils.spikes_io import SpikeParser
+# from nn_modules.spatial_constraints import EventFrameFusionNetwork
+
+import logging
+
+logger = logging.getLogger(__file__)
 
 
 class CooperativeNetwork:
@@ -54,6 +56,8 @@ class HierarchicalCooperativeNetwork(CooperativeNetwork):
 class BasicCooperativeNetwork(CooperativeNetwork):
     def __init__(self, spiking_inputs, params=None, experiment_config=None, operational_mode='offline'):
         CooperativeNetwork.__init__(self, spiking_inputs)
+        logger.debug("Creating Basic Cooperative Network instance, consisting "
+                     "in a Temporal Coincidence Detection module only.")
         self.network = TemporalCoincidenceDetectionNetwork(input_sources=self.retina_inputs,
                                                            network_params=params,
                                                            experiment_params=experiment_config,

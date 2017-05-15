@@ -335,6 +335,7 @@ class TemporalCoincidenceDetectionNetwork:
             A list of population spikes. In each population a neuron id and spiking timestamp are recorded. 
             The population id corresponds to the index in the list.
         """
+        logger.debug("Fetching raw output from temporal coincidence network.")
         spikes_per_population = [x.getSpikes() for x in self._network['collectors']]
         return spikes_per_population
 
@@ -347,6 +348,8 @@ class TemporalCoincidenceDetectionNetwork:
         """
 
         spikes_per_population = self.get_raw_output()
+        logger.debug("Converting raw temporal coincidence network output to timestamped "
+                     "pixel coordinates and disparities events.")
         spikes_in_pixeldisp_space = {'ts': [], 'xs': [], 'ys': [], 'disps': []}
         for population_id, spikes_in_population in enumerate(spikes_per_population):
             for spike in spikes_in_population:

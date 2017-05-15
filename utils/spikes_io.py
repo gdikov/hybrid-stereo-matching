@@ -6,6 +6,10 @@ import numpy as np
 import cPickle
 from datetime import datetime as dt
 
+import logging
+
+logger = logging.getLogger(__file__)
+
 
 class SpikeParser:
     def __init__(self, crop_region=None, resolution=None, simulation_time=None, timestep_unit='us'):
@@ -72,11 +76,13 @@ class SpikeParser:
             return events
 
         if is_input_url:
+            logger.debug("Parsing online spike file.")
             # connect to website and parse text data
             with contextlib.closing(urllib.urlopen(input_data)) as fp:
                 raw_data = fp.read()
                 raw_data = raw2num(raw_data)
         else:
+            logger.debug("Parsing local spike file.")
             filename = os.path.basename(input_data)
             if filename.endswith('dat') or filename.endswith('txt'):
                 with open(input_data, 'r') as fp:
@@ -91,6 +97,7 @@ class SpikeParser:
                 ValueError("Unknown file type. Provide a .txt, .dat, .npz file or url.")
 
         # needs to be sorted by timestamp
+        logger.debug("Sorting file by spike times.")
         raw_data['left'] = raw_data['left'][raw_data['left'][:, 0].argsort()]
         raw_data['right'] = raw_data['right'][raw_data['right'][:, 0].argsort()]
         return raw_data
@@ -107,6 +114,7 @@ class SpikeParser:
         Returns:
             the same dict as the input raw events but with the inappropriate events filtered out.
         """
+        logger.debug("Performing region cropping on the events.")
         # filter events which lie outside the crop_region and normalise the x, y coordinates to [0, n-1]
         events['left'] = events['left'][(self.crop_region[0] <= events['left'][:, 1])
                                         & (events['left'][:, 1] <= self.crop_region[2])
@@ -121,15 +129,18 @@ class SpikeParser:
 
         # convert time to ms
         if self.time_unit == 'us':
+            logger.debug("Converting from us to ms time units. This may introduce rounding errors.")
             events['left'][:, 0] //= 1000
             events['right'][:, 0] //= 1000
 
         if not assume_sorted:
+            logger.debug("Sorting events by spike times.")
             events['left'] = events['left'][events['left'][:, 0].argsort()]
             events['right'] = events['right'][events['right'][:, 0].argsort()]
 
         # get the time region of interest
         if self.simulation_end_time is not None:
+            logger.debug("Performing time cropping on the events.")
             events['left'] = events['left'][np.argmax(events['left'][:, 0] >= self.simulation_start_time):
                                             np.argmax(events['left'][:, 0] > self.simulation_end_time), :]
             events['right'] = events['right'][np.argmax(events['right'][:, 0] >= self.simulation_start_time):
@@ -145,6 +156,7 @@ class SpikeParser:
             return event_list[allowed_indices]
 
         # filter event bursts, i.e. spikes which occur faster than a dt_threshold
+        logger.debug("Filtering event bursts within time interval of {}ms.".format(dt_threshold))
         events['left'] = apply_time_filter(events['left'])
         events['right'] = apply_time_filter(events['right'])
         return events
@@ -169,6 +181,7 @@ def load_spikes(input_file, crop_region=None, resolution=None, simulation_time=N
     raw_data = parser.parse(input_file)
     if crop_region is not None or simulation_time is not None or dt_thresh > 0:
         filtered_data = parser.sanitise_events(raw_data, dt_thresh, assume_sorted=True)
+    logger.debug("Creating SpikeSourceArray spike-times objects.")
     # create lists of (populations) lists of (neuron's spiking times) lists and fill in the time values
     max_t = np.max([np.max(filtered_data['left'][:, 0]), np.max(filtered_data['right'][:, 0])]) + 1
     n_cols, n_rows = parser.effective_resolution
@@ -208,5 +221,6 @@ def save_spikes(config_output, spikes):
     timestamp = str(dt.now().isoformat())
     filename = os.path.join(output_folder_path, config_output['name'] + "_tcd-out_" + timestamp + ".pickle")
     with open(filename, 'wb') as f:
+        logger.debug("Saving {} spikes file.".format(filename))
         cPickle.dump(spikes, f)
     return filename

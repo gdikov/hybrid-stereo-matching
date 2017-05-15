@@ -29,6 +29,7 @@ class HybridStereoMatching:
         Returns:
             In-place method
         """
+        logger.info("Setting up spiking neural network for event-based stereo matching.")
         # setup timestep of simulation and minimum and maximum synaptic delays
         simulation_time_step = 0.2
         pyNN.setup(timestep=simulation_time_step,
@@ -46,6 +47,7 @@ class HybridStereoMatching:
         self.snn = BasicCooperativeNetwork(spiking_inputs,
                                            experiment_config=self.config['input'],
                                            operational_mode='offline')
+        # logger.info("Setting up MRF belief propagation network for frame-based stereo matching.")
         # self.mrf = StereoMRF()
         # self.frames = FrameManager()
 
@@ -56,9 +58,12 @@ class HybridStereoMatching:
         Returns:
 
         """
+        logger.info("Starting the spiking neural network.")
         self.snn.run(self.config['simulation']['duration'])
         self.collect_output()
 
     def collect_output(self):
+        logger.debug("Fetching and storing the output from the network.")
         disparities = self.snn.get_output()
-        save_spikes(self.config['general'], disparities)
+        output_filepath = save_spikes(self.config['general'], disparities)
+        return output_filepath
