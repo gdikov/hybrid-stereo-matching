@@ -2,5 +2,6 @@ from stereovis.hybrid_stereo import HybridStereoMatching
 
 
 if __name__ == '__main__':
-    stereo = HybridStereoMatching("configs/nst_letters.yaml")
+    stereo = HybridStereoMatching("/home/gdikov/StereoVision/SemiframelessStereoMatching/"
+                                  "experiments/configs/pendulum.yaml")
     stereo.run()
