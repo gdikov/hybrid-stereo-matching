@@ -15,16 +15,17 @@ neuron:
   v_reset_blocker: -84.0
   v_reset_collector: -90.0
 
+# all inhibitory parameters should be negative real numbers
 synapse:
-  wBC: 18.0  # although the parameter is inhibitory, it should be a positive real number
+  wBC: -18.0
   dBC: 0.2
   wSC: 18.0
   dSC: 1.6
   wSaB: 18.0
   dSaB: 0.2
-  wSzB: 18.0
+  wSzB: -18.0
   dSzB: 0.2
-  wCCi: 18.0
+  wCCi: -18.0
   dCCi: 0.2
   wCCe: 1.8
   dCCe: 0.2
@@ -35,5 +36,6 @@ topology:
   add_gating: True
   add_continuity_constraint: True
   add_uniqueness_constraint: True
-  add_ordering_constraint: True
-  radius_continuity: 1     # continuity constraint
+  add_ordering_constraint: False
+  radius_continuity: 1     # continuity constraint range radius
+  radius_ordering: 1       # ordering constraint range radius

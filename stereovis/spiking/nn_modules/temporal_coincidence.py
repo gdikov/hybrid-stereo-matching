@@ -318,8 +318,8 @@ class TemporalCoincidenceDetectionNetwork:
         all_mirrored_diags = [self._network_topology[::-1, :].diagonal(i) for i in xrange(-self.max_disparity - 1,
                                                                                           self.max_disparity + 2)]
         valid_mirrored_diags = [group for group in [d[d >= 0] for d in all_mirrored_diags] if len(group) > 1]
-        for pair in valid_mirrored_diags:
-            for presynaptic, postsynaptic in filter(lambda x: x[0] != x[1], it.product(pair, repeat=2)):
+        for mirrored_diag in valid_mirrored_diags:
+            for presynaptic, postsynaptic in pairs_of_neighbours(mirrored_diag, window_size=2):
                 pyNN.Projection(presynaptic_population=self._network['collectors'][presynaptic],
                                 postsynaptic_population=self._network['collectors'][postsynaptic],
                                 connector=pyNN.OneToOneConnector(weights=self.params['synapse']['wCCo'],

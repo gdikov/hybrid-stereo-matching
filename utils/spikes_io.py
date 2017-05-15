@@ -69,12 +69,12 @@ class SpikeParser:
             for event in data.split('\n'):
                 event = map(int, event.split())
                 # interpret 0 as right retina id and discard the retina id flag when storing events
-                if len(event) == 5 and event[-1] == 0:
-                    events['right'].append(event[:-1])
-                elif len(event) == 5 and event[-1] == 1:
+                if len(event) == 5 and event[-1] == 1:
                     events['left'].append(event[:-1])
-            events['left'] = np.asarray(events['left'])
-            events['right'] = np.asarray(events['right'])
+                elif len(event) == 5 and event[-1] == 0:
+                    events['right'].append(event[:-1])
+            events['left'] = np.asarray(events['left']).astype(np.float)
+            events['right'] = np.asarray(events['right']).astype(np.float)
             return events
 
         if is_input_url:
@@ -94,7 +94,8 @@ class SpikeParser:
                 # a dict with 'left' and 'right' keys containing a numpy arrays of N spikes
                 # each of which is represented by a timestamp, x, y coordinate and a polarity value.
                 file_data = np.load(input_data)
-                raw_data = {'left': np.asarray(file_data['left']), 'right': np.asarray(file_data['right'])}
+                raw_data = {'left': np.asarray(file_data['left']).astype(np.float),
+                            'right': np.asarray(file_data['right']).astype(np.float)}
             else:
                 ValueError("Unknown file type. Provide a .txt, .dat, .npz file or url.")
 
@@ -132,8 +133,8 @@ class SpikeParser:
         # convert time to ms
         if self.time_unit == 'us':
             logger.debug("Converting from us to ms time units. This may introduce rounding errors.")
-            events['left'][:, 0] //= 1000
-            events['right'][:, 0] //= 1000
+            events['left'][:, 0] /= 1000.0
+            events['right'][:, 0] /= 1000.0
 
         if not assume_sorted:
             logger.debug("Sorting events by spike times.")
@@ -143,15 +144,20 @@ class SpikeParser:
         # get the time region of interest
         if self.simulation_end_time is not None:
             logger.debug("Performing time cropping on the events.")
+            end_index_left = np.argmax(events['left'][:, 0] > self.simulation_end_time)
+            end_index_left = len(events['left'][:, 0]) if end_index_left == 0 else end_index_left
             events['left'] = events['left'][np.argmax(events['left'][:, 0] >= self.simulation_start_time):
-                                            np.argmax(events['left'][:, 0] > self.simulation_end_time), :]
+                                            end_index_left, :]
+            end_index_right = np.argmax(events['left'][:, 0] > self.simulation_end_time)
+            end_index_right = len(events['left'][:, 0]) if end_index_right == 0 else end_index_right
             events['right'] = events['right'][np.argmax(events['right'][:, 0] >= self.simulation_start_time):
-                                              np.argmax(events['right'][:, 0] > self.simulation_end_time), :]
+                                              end_index_right, :]
 
         def apply_time_filter(event_list):
-            last_spikes = -1 * np.ones(self.effective_resolution)
+            last_spikes = -2 * dt_threshold * np.ones(self.effective_resolution)
             allowed_indices = []
             for i, (t, x, y, _) in enumerate(event_list):
+                x, y = int(x), int(y)
                 if t - last_spikes[x, y] > dt_threshold:
                     allowed_indices.append(i)
                 last_spikes[x, y] = t
@@ -185,14 +191,14 @@ def load_spikes(input_file, crop_region=None, resolution=None, simulation_time=N
         filtered_data = parser.sanitise_events(raw_data, dt_thresh, assume_sorted=True)
     logger.debug("Creating SpikeSourceArray spike-times objects.")
     # create lists of (populations) lists of (neuron's spiking times) lists and fill in the time values
-    max_t = np.max([np.max(filtered_data['left'][:, 0]), np.max(filtered_data['right'][:, 0])]) + 1
+    max_t = np.max([np.max(filtered_data['left'][:, 0]), np.max(filtered_data['right'][:, 0])]) + 10
     n_cols, n_rows = parser.effective_resolution
     retina_spikes = {'left': [[[] for _ in xrange(n_rows)] for _ in xrange(n_cols)],
                      'right': [[[] for _ in xrange(n_rows)] for _ in xrange(n_cols)]}
     for t, population_id, neuron_id, _ in filtered_data['left']:
-        retina_spikes['left'][population_id][neuron_id].append(t)
-    for t, population_id, neuron_id, _  in filtered_data['left']:
-        retina_spikes['right'][population_id][neuron_id].append(t)
+        retina_spikes['left'][int(population_id)][int(neuron_id)].append(t)
+    for t, population_id, neuron_id, _ in filtered_data['right']:
+        retina_spikes['right'][int(population_id)][int(neuron_id)].append(t)
     # append a fictitious spiking time which is never reached.
     # It is necessary for the SpikeSourceArray requires a value for each neuron's spiking
     for population_id in xrange(n_cols):
