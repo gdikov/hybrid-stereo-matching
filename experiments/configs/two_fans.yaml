@@ -1,0 +1,18 @@
+# the general information is used for the experiment logging
+general:
+  name: Fans
+  output_dir: ../data/output
+
+# input related configuration
+input:
+  path: ../data/spiking/Back_On_Front_Accel_Fixed_even.npz
+  crop: !!python/tuple [25, 10]         # offset from the vertical and the horizontal border (top left pixel coordinate)
+  resolution: !!python/tuple [92, 92]   # in pixels, first is resolution along x (horizontal) axis and then y axis
+  max_disparity: 24                     # maximum detectable disparity.
+  min_disparity: 0
+
+# simulation related configuration
+simulation:
+  duration: 10000     # time in ms
+  time_step: 0.2      # time in ms
+  n_chips:  6         # each has 850 cores
