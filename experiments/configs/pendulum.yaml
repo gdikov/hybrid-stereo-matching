@@ -10,6 +10,7 @@ input:
   resolution: !!python/tuple [72, 84]   # in pixels, first is resolution along x (horizontal) axis and then y axis [4, 4]
   max_disparity: 42                     # maximum detectable disparity. 42 2
   min_disparity: 0
+  timestamp_unit: us
 
 # simulation related configuration
 simulation:

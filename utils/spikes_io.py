@@ -68,11 +68,13 @@ class SpikeParser:
             events = {'left': [], 'right': []}
             for event in data.split('\n'):
                 event = map(int, event.split())
-                # interpret 0 as right retina id
-                if event[-1] == 0:
-                    events['right'].append(event)
-                else:
-                    events['left'].append(event)
+                # interpret 0 as right retina id and discard the retina id flag when storing events
+                if len(event) == 5 and event[-1] == 0:
+                    events['right'].append(event[:-1])
+                elif len(event) == 5 and event[-1] == 1:
+                    events['left'].append(event[:-1])
+            events['left'] = np.asarray(events['left'])
+            events['right'] = np.asarray(events['right'])
             return events
 
         if is_input_url:

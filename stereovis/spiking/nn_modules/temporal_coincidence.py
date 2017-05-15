@@ -149,9 +149,9 @@ class TemporalCoincidenceDetectionNetwork:
         #   * and neurons with id from dy to the end, i.e. 2dy - 1, serve as the right blocking neurons
         connection_list = []
         for y in range(self.retina_n_rows):
-            connection_list.append((y, y, self.params['synaptic']['wBC'], self.params['synaptic']['dBC']))
+            connection_list.append((y, y, self.params['synapse']['wBC'], self.params['synapse']['dBC']))
             connection_list.append((y + self.retina_n_rows, y,
-                                    self.params['synaptic']['wBC'], self.params['synaptic']['dBC']))
+                                    self.params['synapse']['wBC'], self.params['synapse']['dBC']))
 
         logger.debug("Generated gating connection list: {}".format(connection_list))
         # connect the inhibitory neurons (blockers) to the cell output (collector) neurons

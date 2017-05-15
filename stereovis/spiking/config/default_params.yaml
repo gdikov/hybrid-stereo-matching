@@ -12,7 +12,7 @@ neuron:
   tau_E: 2.0
   tau_I: 2.0
   tau_mem: 2.07
-  v_reset_blocker: -84.0,
+  v_reset_blocker: -84.0
   v_reset_collector: -90.0
 
 synapse:
@@ -32,7 +32,7 @@ synapse:
   dCCo: 0.2
 
 topology:
-  add_gating: False
+  add_gating: True
   add_continuity_constraint: True
   add_uniqueness_constraint: True
   add_ordering_constraint: True

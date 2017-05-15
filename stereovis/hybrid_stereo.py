@@ -40,7 +40,8 @@ class HybridStereoMatching:
         spikes = load_spikes(input_file=self.config['input']['path'],
                              resolution=self.config['input']['resolution'],
                              crop_region=self.config['input']['crop'],
-                             simulation_time=self.config['simulation']['duration'], timestep_unit='us', dt_thresh=1)
+                             simulation_time=self.config['simulation']['duration'],
+                             timestep_unit=self.config['input']['timestamp_unit'], dt_thresh=1)
         retina_left = create_retina(spikes['left'], label='retina_left')
         retina_right = create_retina(spikes['right'], label='retina_right')
         spiking_inputs = {'left': retina_left, 'right': retina_right}
