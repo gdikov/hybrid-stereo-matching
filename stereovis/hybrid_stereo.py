@@ -1,10 +1,10 @@
 import spynnaker.pyNN as pyNN
 from spiking.stereo_snn import BasicCooperativeNetwork, HierarchicalCooperativeNetwork
 from spiking.nn_modules.spike_source import create_retina
-from framed.stereo_mrf import StereoMRF
+from framed.stereo_framebased import FramebasedStereoMatching
 
 from utils.spikes_io import load_spikes, save_spikes
-from utils.frames_io import load_frames
+from utils.frames_io import load_frames, generate_frames_from_spikes
 from utils.config import load_config
 
 import logging
@@ -48,7 +48,21 @@ class HybridStereoMatching:
             spiking_inputs = {'left': retina_left, 'right': retina_right}
             if self.config['general']['framebased_algorithm'] != 'none':
                 logger.info("Preparing frames for the frame-based stereo matching.")
-                # self.frames = FrameManager()
+                self.frames_left = load_frames(input_path="/home/gdikov/StereoVision/SemiframelessStereoMatching/"
+                                                          "data/head_exported",
+                                               resolution=self.config['input']['resolution'],
+                                               crop_region=self.config['input']['crop'],
+                                               simulation_time=self.config['simulation']['duration'])
+                self.frames_right = load_frames(input_path="/home/gdikov/StereoVision/SemiframelessStereoMatching/"
+                                                           "data/head_exported",
+                                                resolution=self.config['input']['resolution'],
+                                                crop_region=self.config['input']['crop'],
+                                                simulation_time=self.config['simulation']['duration'])
+                logger.info("Setting up MRF belief propagation network for frame-based stereo matching.")
+                self.framebased_algorithm = \
+                    FramebasedStereoMatching(backend=self.config['general']['framebased_algorithm'],
+                                             resolution=self.config['input']['resolution'],
+                                             max_disparity=self.config['input']['max_disparity'])
             else:
                 logger.warning("Skipping frame-based stereo matching algorithm initialisation. "
                                "The Hybrid Stereo Matching framework is reduced to purely event-based one.")
@@ -70,10 +84,6 @@ class HybridStereoMatching:
             raise ValueError("Unsupported event-based algorithm. Can be `tcd` for the temporal coincidence "
                              "detection only or `hn` for a hierarchical network architecture.")
 
-        # logger.info("Setting up MRF belief propagation network for frame-based stereo matching.")
-        # self.framebased_algorithm = StereoMRF()
-
-
     def run(self):
         """
         Run the spiking network and the Markov random field.
@@ -81,9 +91,9 @@ class HybridStereoMatching:
         Returns:
 
         """
-        logger.info("Starting the spiking neural network.")
-        self.eventbased_algorithm.run(self.config['simulation']['duration'])
-        prior_disparities = self.eventbased_algorithm.get_output()
-        save_spikes(self.config['general'], prior_disparities)
-        self.framebased_algorithm.run(prior_disparities)
+        if self.config['general']['mode'] == 'offline':
+            self.eventbased_algorithm.run(self.config['simulation']['duration'])
+            prior_disparities = self.eventbased_algorithm.get_output()
+            save_spikes(self.config['general'], prior_disparities)
+            self.framebased_algorithm.run(prior_disparities)
 
