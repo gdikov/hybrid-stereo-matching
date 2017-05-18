@@ -185,6 +185,11 @@ def load_spikes(input_file, crop_region=None, resolution=None, simulation_time=N
     Returns:
         A dict with 'left' and 'right' retina spiking times.
     """
+    if os.path.splitext(os.path.basename(input_file))[1] == '.pickle':
+        with open(input_file, 'rb') as fp:
+            spikes = cPickle.load(fp)
+        return spikes
+
     parser = SpikeParser(crop_region, resolution, simulation_time, timestep_unit)
     raw_data = parser.parse(input_file)
     if crop_region is not None or simulation_time is not None or dt_thresh > 0:
