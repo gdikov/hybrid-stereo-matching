@@ -4,8 +4,9 @@ from spiking.nn_modules.spike_source import create_retina
 from framed.stereo_framebased import FramebasedStereoMatching
 
 from utils.spikes_io import load_spikes, save_spikes
-from utils.frames_io import load_frames, generate_frames_from_spikes
+from utils.frames_io import load_frames, save_frames, generate_frames_from_spikes
 from utils.config import load_config
+from utils.helpers import latest_file_in_dir
 
 import logging
 
@@ -29,71 +30,97 @@ class HybridStereoMatching:
         Returns:
             In-place method
         """
-        logger.info("Preparing events for the event-based stereo matching.")
-        # setup timestep of simulation and minimum and maximum synaptic delays
-        pyNN.setup(timestep=self.config['simulation']['timestep'],
-                   min_delay=self.config['simulation']['timestep'],
-                   max_delay=10 * self.config['simulation']['timestep'],
-                   n_chips_required=self.config['simulation']['n_chips'],
-                   threads=4)
+        if self.config['simulation']['run_eventbased']:
+            logger.info("Preparing events for the event-based stereo matching.")
+            # setup timestep of simulation and minimum and maximum synaptic delays
+            pyNN.setup(timestep=self.config['simulation']['timestep'],
+                       min_delay=self.config['simulation']['timestep'],
+                       max_delay=10 * self.config['simulation']['timestep'],
+                       n_chips_required=self.config['simulation']['n_chips'],
+                       threads=4)
+        else:
+            logger.info("Skipping spiking stereo matching algorithm initialisation.")
         if self.config['general']['mode'] == 'offline':
-            logger.info("Preparing spike sources for offline mode.")
-            spikes = load_spikes(input_file=self.config['input']['spikes_path'],
-                                 resolution=self.config['input']['resolution'],
-                                 crop_region=self.config['input']['crop'],
-                                 simulation_time=self.config['simulation']['duration'],
-                                 timestep_unit=self.config['input']['timestamp_unit'], dt_thresh=1)
-            retina_left = create_retina(spikes['left'], label='retina_left')
-            retina_right = create_retina(spikes['right'], label='retina_right')
-            spiking_inputs = {'left': retina_left, 'right': retina_right}
-            if self.config['general']['framebased_algorithm'] != 'none':
-                logger.info("Preparing frames for the frame-based stereo matching.")
-                self.frames_left = load_frames(input_path="/home/gdikov/StereoVision/SemiframelessStereoMatching/"
-                                                          "data/head_exported",
-                                               resolution=self.config['input']['resolution'],
-                                               crop_region=self.config['input']['crop'],
-                                               simulation_time=self.config['simulation']['duration'])
-                self.frames_right = load_frames(input_path="/home/gdikov/StereoVision/SemiframelessStereoMatching/"
-                                                           "data/head_exported",
-                                                resolution=self.config['input']['resolution'],
-                                                crop_region=self.config['input']['crop'],
-                                                simulation_time=self.config['simulation']['duration'])
-                logger.info("Setting up MRF belief propagation network for frame-based stereo matching.")
-                self.framebased_algorithm = \
-                    FramebasedStereoMatching(backend=self.config['general']['framebased_algorithm'],
-                                             resolution=self.config['input']['resolution'],
-                                             max_disparity=self.config['input']['max_disparity'])
+            if self.config['simulation']['run_eventbased']:
+                logger.info("Preparing spike sources for offline mode.")
+                spikes = load_spikes(input_file=self.config['input']['spikes_path'],
+                                     resolution=self.config['input']['resolution'],
+                                     crop_region=self.config['input']['crop'],
+                                     simulation_time=self.config['simulation']['duration'],
+                                     timestep_unit=self.config['input']['timestamp_unit'], dt_thresh=1)
+                retina_left = create_retina(spikes['left'], label='retina_left')
+                retina_right = create_retina(spikes['right'], label='retina_right')
+                spiking_inputs = {'left': retina_left, 'right': retina_right}
+            if self.config['simulation']['run_framebased']:
+                if self.config['general']['framebased_algorithm'] != 'none':
+                    logger.info("Preparing frames for the frame-based stereo matching.")
+                    frames_left, times = load_frames(input_path="/home/gdikov/StereoVision/SemiframelessStereoMatching/"
+                                                                "data/head_exported",
+                                                     resolution=self.config['input']['resolution'],
+                                                     crop_region=self.config['input']['crop'],
+                                                     simulation_time=self.config['simulation']['duration'])
+                    frames_right, _ = load_frames(input_path="/home/gdikov/StereoVision/SemiframelessStereoMatching/"
+                                                             "data/head_exported",
+                                                  resolution=self.config['input']['resolution'],
+                                                  crop_region=self.config['input']['crop'],
+                                                  simulation_time=self.config['simulation']['duration'])
+                    logger.info("Setting up MRF belief propagation network for frame-based stereo matching.")
+                    self.framebased_algorithm = \
+                        FramebasedStereoMatching(algorithm=self.config['general']['framebased_algorithm'],
+                                                 resolution=self.config['input']['resolution'],
+                                                 max_disparity=self.config['input']['max_disparity'],
+                                                 frames={'left': frames_left, 'right': frames_right, 'ts': times})
+                else:
+                    raise ValueError("The configuration parameters make no sense. "
+                                     "When running a frame-based stereo matching, provide also the algorithm type.")
             else:
-                logger.warning("Skipping frame-based stereo matching algorithm initialisation. "
-                               "The Hybrid Stereo Matching framework is reduced to purely event-based one.")
+                logger.warning("Skipping frame-based stereo matching algorithm initialisation.")
         else:
             raise NotImplementedError("Online mode of operation is not upproted yet.")
 
-        logger.info("Setting up spiking neural network for event-based stereo matching.")
-        if self.config['general']['eventbased_algorithm'] == 'tcd':
-            self.eventbased_algorithm = BasicCooperativeNetwork(spiking_inputs,
-                                                                experiment_config=self.config['input'],
-                                                                params=self.config['general']['network_params'],
-                                                                operational_mode=self.config['general']['mode'])
-        elif self.config['general']['eventbased_algorithm'] == 'hn':
-            self.eventbased_algorithm = HierarchicalCooperativeNetwork(spiking_inputs,
-                                                                       experiment_config=self.config['input'],
-                                                                       params=self.config['general']['network_params'],
-                                                                       operational_mode=self.config['general']['mode'])
-        else:
-            raise ValueError("Unsupported event-based algorithm. Can be `tcd` for the temporal coincidence "
-                             "detection only or `hn` for a hierarchical network architecture.")
+        if self.config['simulation']['run_eventbased']:
+            logger.info("Setting up spiking neural network for event-based stereo matching.")
+            if self.config['general']['eventbased_algorithm'] == 'tcd':
+                self.eventbased_algorithm = BasicCooperativeNetwork(spiking_inputs,
+                                                                    experiment_config=self.config['input'],
+                                                                    params=self.config['general']['network_params'],
+                                                                    operational_mode=self.config['general']['mode'])
+            elif self.config['general']['eventbased_algorithm'] == 'hn':
+                self.eventbased_algorithm = HierarchicalCooperativeNetwork(spiking_inputs,
+                                                                           experiment_config=self.config['input'],
+                                                                           params=self.config['general']['network_params'],
+                                                                           operational_mode=self.config['general']['mode'])
+            else:
+                raise ValueError("Unsupported event-based algorithm. Can be `tcd` for the temporal coincidence "
+                                 "detection only or `hn` for a hierarchical network architecture.")
 
     def run(self):
         """
-        Run the spiking network and the Markov random field.
+        Run the spiking network and the Markov random field according to the experiment configuration.
         
         Returns:
-
+            In-place method.
         """
         if self.config['general']['mode'] == 'offline':
-            self.eventbased_algorithm.run(self.config['simulation']['duration'])
-            prior_disparities = self.eventbased_algorithm.get_output()
-            save_spikes(self.config['general'], prior_disparities)
-            self.framebased_algorithm.run(prior_disparities)
+            if self.config['simulation']['run_eventbased']:
+                self.eventbased_algorithm.run(self.config['simulation']['duration'])
+                prior_disparities = self.eventbased_algorithm.get_output()
+                save_spikes(self.config['general'], prior_disparities)
+            if self.config['simulation']['run_framebased']:
+                if not self.config['simulation']['run_eventbased']:
+                    eventbased_output = latest_file_in_dir(self.config['general']['output_dir'], extension='pickle')
+                    prior_disparities = load_spikes(eventbased_output)
+                frame_rate = 1000 // self.config['input']['frame_rate']
+                prior_frames, timestamps = generate_frames_from_spikes(resolution=self.config['input']['resolution'],
+                                                                       xs=prior_disparities['xs'],
+                                                                       ys=prior_disparities['ys'],
+                                                                       ts=prior_disparities['ts'],
+                                                                       zs=prior_disparities['disps'],
+                                                                       time_interval=frame_rate)
+                prior_dict = {'priors': prior_frames, 'ts': timestamps}
+                self.framebased_algorithm.run(prior_dict)
+                depth_frames = self.framebased_algorithm.get_output()
+                save_frames(depth_frames)
+        else:
+            raise NotImplementedError
 
