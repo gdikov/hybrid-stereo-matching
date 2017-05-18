@@ -1,5 +1,6 @@
 import itertools as it
-
+import glob
+import os
 
 def nwise(iterable, n=2):
     """
@@ -36,3 +37,23 @@ def pairs_of_neighbours(iterable, window_size=2, add_reciprocal=True):
         pairs = pairs + map(lambda y: (y[1], y[0]), pairs)
 
     return pairs
+
+
+def latest_file_in_dir(dirname, extension='*', mode='creation'):
+    """
+    Find the most recent file in a directory with a certain extension. 
+    
+    Args:
+        dirname: the path to the directory where the files are located 
+        extension: optional, and extension to filter only certain types of files
+        mode: optional, the criterion by which the most recent is determined. Can be `creation` or `modification`.
+
+    Returns:
+        The filename of the most recently created file.
+    """
+    if mode == 'creation':
+        key_ = os.path.getctime
+    elif mode == 'modification':
+        key_ = os.path.getmtime
+    latest_file = min(glob.iglob(os.path.join(dirname, '*.' + extension)), key=key_)
+    return latest_file
