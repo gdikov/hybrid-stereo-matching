@@ -1,7 +1,11 @@
 import re
 import numpy as np
 import os
-from skimage.io import imread
+import cPickle
+from skimage.io import imread, imsave
+import logging
+
+logger = logging.getLogger(__file__)
 
 
 def load_ground_truth(filename):
@@ -71,7 +75,7 @@ def load_frames(input_path, crop_region=None, resolution=None, simulation_time=N
         simulation_time: the start and stop time or stop time of the simulation, used to take the frames of interest.
 
     Returns:
-        A numpy array of shape KxNxM where N is the number of loaded images of dimension NxM
+        A numpy array of shape KxNxM where N is the number of loaded images of dimension NxM and a list of timestamps
     """
     if crop_region is not None and resolution is not None:
         # top left coordinates in x, y order
@@ -99,17 +103,37 @@ def load_frames(input_path, crop_region=None, resolution=None, simulation_time=N
             images = np.stack([imread(img) for img in image_files])
         else:
             images = np.stack([imread(img)[row_start:row_stop, col_start:col_stop] for img in image_files])
-        return images
+
+        # load the timestamps if available
+        timestamps_file = os.path.join(input_path, 'timestamps.pickle')
+        if os.path.exists(timestamps_file):
+            with open(timestamps_file, 'rb') as fp:
+                timestamps = cPickle.load(fp)
+        else:
+            logger.error("No timestamps file located in the frames folder!")
+            timestamps = None
+        return images, timestamps
 
     else:
         if col_stop or col_start or row_stop or row_start:
-            return imread(input_path)
+            return imread(input_path), None
         else:
-            return imread(input_path)[row_start:row_stop, col_start:col_stop]
+            return imread(input_path)[row_start:row_stop, col_start:col_stop], None
 
 
-def save_frames():
-    raise NotImplementedError
+def save_frames(frames, output_dir):
+    """
+    Save the frames as png images.
+    
+    Args:
+        frames: a list of frames (numpy arrays) to be saved 
+        output_dir: a path to the output directory 
+
+    Returns:
+        In-place method.
+    """
+    for i, frame in enumerate(frames):
+        imsave(os.path.join(output_dir, '{}.png'.format(i)), frame)
 
 
 def generate_frames_from_spikes(resolution, xs, ys, ts, zs=None, start_time=0, time_interval=100):
@@ -129,30 +153,31 @@ def generate_frames_from_spikes(resolution, xs, ys, ts, zs=None, start_time=0, t
     Returns:
         A numpy array of shape N x *`resolution` representing the buffered frames.
     """
+    xs, ys, ts = np.asarray(xs), np.asarray(ys), np.asarray(ts)
+    zs = np.asarray(zs) if zs is not None else None
     # sort the spike times by time and use the sorted indices order to access the events in chronological order too
     sorted_indices = np.argsort(ts)
     sorted_time = ts[sorted_indices]
     # remove the events which happened before the `start_time`
     sorted_time = sorted_time[sorted_time >= start_time]
-    sorted_indices = sorted_indices[len(sorted_indices) - len(sorted_time):]
+    sorted_indices = sorted_indices[sorted_indices.size - sorted_time.size:]
     # compute the differences in spiking times and split the whole event stream into time-wise equally sized frames
-    delta_ts = np.convolve(sorted_time, [1, -1], mode='valid')
-    indices_accumulated_frames = np.concatenate([np.array([False]), np.cumsum(delta_ts) % (time_interval + 1) == 0])
-    indices_frames = np.split(sorted_indices, sorted_indices[indices_accumulated_frames])
-    indices_frames = indices_frames[:-1] if indices_frames[-1].shape == indices_frames[0].shape else indices_frames
-    indices_frames = np.array(indices_frames)
+    frame_ticks = np.convolve(sorted_time % time_interval, [1, -1], mode='valid') < 0
+    frame_ticks = np.where(np.concatenate([np.array([False]), frame_ticks]))[0]
+    timestamps = sorted_time[frame_ticks]
+    # clip the end since there is no timestamp information for it and the frame may be incomplete.
+    indices_frames = np.split(sorted_indices, frame_ticks)[:-1]
     # buffer the events into frames
     frames_count = len(indices_frames)
-    frames_xs, frames_ys, frames_zs = xs[indices_frames], ys[indices_frames], zs[indices_frames]
+    frames_cols, frames_rows, frames_vals = zip(*[(xs[inds], ys[inds], zs[inds]) for inds in indices_frames])
     n_cols, n_rows = resolution
     frames = np.zeros((frames_count, n_rows, n_cols), dtype=np.int32)
-    as_binary = zs is not None
-    for i, x, y, z in enumerate(zip(frames_xs, frames_ys, frames_zs)):
+    for i, (cols, rows, vals) in enumerate(zip(frames_cols, frames_rows, frames_vals)):
         # set pixel to 1 if spike has occurred at any time during the frame
-        if as_binary:
-            frames[i, x, y] = 1
+        if zs is None:
+            frames[i, rows, cols] = 1
         # otherwise, set with the intensity value
         else:
-            frames[i, x, y] = z
+            frames[i, rows, cols] = vals
 
-    return frames
+    return frames, timestamps

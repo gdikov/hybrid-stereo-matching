@@ -186,8 +186,12 @@ def load_spikes(input_file, crop_region=None, resolution=None, simulation_time=N
         A dict with 'left' and 'right' retina spiking times.
     """
     if os.path.splitext(os.path.basename(input_file))[1] == '.pickle':
-        with open(input_file, 'rb') as fp:
-            spikes = cPickle.load(fp)
+        try:
+            with open(input_file, 'rb') as fp:
+                spikes = cPickle.load(fp)
+        except IOError:
+            logger.error("No network output spikes found. Run the spiking network first.")
+            spikes = None
         return spikes
 
     parser = SpikeParser(crop_region, resolution, simulation_time, timestep_unit)
