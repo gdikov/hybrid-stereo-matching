@@ -176,7 +176,7 @@ def load_spikes(input_file, crop_region=None, resolution=None, simulation_time=N
      
     Args:
         input_file: path to input data file or a url
-        crop_region: the region of interest in pixels (top left and bottom right coordinates in x, y order)
+        crop_region: the region of interest in pixels defined by top left coordinates in x, y order
         resolution: the standard retina resolution
         simulation_time: simulation start and end time or simulation end time only
         timestep_unit: the units in which the timestamps are encoded. Can be 'us' or 'ms'.
