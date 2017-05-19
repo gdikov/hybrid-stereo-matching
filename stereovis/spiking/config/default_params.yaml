@@ -29,7 +29,7 @@ synapse:
   dCCi: 0.2
   wCCe: 1.8
   dCCe: 0.2
-  wCCo: 9.0
+  wCCo: -9.0
   dCCo: 0.2
 
 topology:
