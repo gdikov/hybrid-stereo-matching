@@ -1,0 +1,28 @@
+# the general information is used for the experiment logging
+general:
+  name: Head
+  output_dir: /home/gdikov/StereoVision/SemiframelessStereoMatching/data/output/head
+  mode: offline
+  eventbased_algorithm: tcd               # Temporal Coincidence Network `tcd` or Hierarchical Network `hn`
+  framebased_algorithm: mrf               # Markov Random Field `mrf` or `none` for event-based matching only
+  network_params: no_blocker                 # will load stereovis/spiking/config/default_params.yaml
+                                          # for neural, synaptic and topological parameters
+
+# input related configuration
+input:
+  spikes_path: /home/gdikov/StereoVision/SemiframelessStereoMatching/data/input/spikes/head_1left_0right.npz
+  frames_path: /home/gdikov/StereoVision/SemiframelessStereoMatching/data/input/frames/head/
+  frame_rate: 20                        # frames per second for the frame-based algorithm
+  crop: !!python/tuple [55, 30]         # offset from the vertical and the horizontal border (top left pixel coordinate)
+  resolution: !!python/tuple [115, 110]   # in pixels, first is resolution along x (horizontal) axis and then y axis
+  max_disparity: 50                     # maximum detectable disparity.
+  min_disparity: 0
+  timestamp_unit: us
+
+# simulation related configuration
+simulation:
+  run_eventbased: True    # whether to run the spiking algorithm
+  run_framebased: True    # whether to run the frame-based algorithm
+  duration: 15000         # time in ms
+  timestep: 0.2           # time in ms
+  n_chips:  6             # each has 850 cores
