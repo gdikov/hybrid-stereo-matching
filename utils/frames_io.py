@@ -115,7 +115,7 @@ def load_frames(input_path, crop_region=None, resolution=None, simulation_time=N
         return images, timestamps
 
     else:
-        if col_stop or col_start or row_stop or row_start:
+        if not (col_stop or col_start or row_stop or row_start):
             return imread(input_path), None
         else:
             return imread(input_path)[row_start:row_stop, col_start:col_stop], None

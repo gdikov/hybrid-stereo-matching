@@ -94,8 +94,11 @@ class SpikeParser:
                 # a dict with 'left' and 'right' keys containing a numpy arrays of N spikes
                 # each of which is represented by a timestamp, x, y coordinate and a polarity value.
                 file_data = np.load(input_data)
-                raw_data = {'left': np.asarray(file_data['left']).astype(np.float),
-                            'right': np.asarray(file_data['right']).astype(np.float)}
+                if 'left' in file_data.keys() and 'right' in file_data.keys():
+                    raw_data = {'left': np.asarray(file_data['left']).astype(np.float),
+                                'right': np.asarray(file_data['right']).astype(np.float)}
+                else:
+                    raise ValueError("Expected a npz file with keys `left` and `right`.")
             else:
                 ValueError("Unknown file type. Provide a .txt, .dat, .npz file or url.")
 
