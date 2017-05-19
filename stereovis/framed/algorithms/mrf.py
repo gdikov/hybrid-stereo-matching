@@ -18,7 +18,7 @@ class StereoMRF(object):
                                'east': np.zeros(self.dimension, dtype=np.float32),
                                'data': np.zeros(self.dimension, dtype=np.float32)}
 
-    def _init_fields(self, image_left, image_right, prior, prior_trust_factor=1.0, reinit_messages=True):
+    def _init_fields(self, image_left, image_right, prior=None, prior_trust_factor=1.0, reinit_messages=True):
         """
         Initialise the message fields -- each hidden variable contains 5 message boxes from the 4 adjacent variables 
         (south, west, north, east) and the observed variable (data).
@@ -34,6 +34,7 @@ class StereoMRF(object):
         Returns:
             In-place method
         """
+        assert image_left.shape == image_right.shape
         self.reference_image = image_left.astype('float32')
         self.secondary_image = image_right.astype('float32')
         if reinit_messages:
@@ -46,6 +47,7 @@ class StereoMRF(object):
         nrow, ncol = self.reference_image.shape
         # crop the border from the high right in the right image as it cannot be mathed to the left
         if prior is not None:
+            assert image_right.shape == prior.shape and prior.shape == self._message_field['data'].shape[1:]
             for l in xrange(self.n_levels):
                 data_contrib = np.hstack((np.abs(self.reference_image[:, l:] - self.secondary_image[:, :ncol - l]),
                                           np.ones((nrow, l))))

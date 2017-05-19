@@ -1,3 +1,4 @@
+import os
 import spynnaker.pyNN as pyNN
 from spiking.stereo_snn import BasicCooperativeNetwork, HierarchicalCooperativeNetwork
 from spiking.nn_modules.spike_source import create_retina
@@ -54,16 +55,16 @@ class HybridStereoMatching:
             if self.config['simulation']['run_framebased']:
                 if self.config['general']['framebased_algorithm'] != 'none':
                     logger.info("Preparing frames for the frame-based stereo matching.")
-                    frames_left, times = load_frames(input_path="/home/gdikov/StereoVision/SemiframelessStereoMatching/"
-                                                                "data/head_exported",
+                    frames_left, times = load_frames(input_path=os.path.join(self.config['input']['frames_path'], 'left'),
                                                      resolution=self.config['input']['resolution'],
                                                      crop_region=self.config['input']['crop'],
-                                                     simulation_time=self.config['simulation']['duration'])
-                    frames_right, _ = load_frames(input_path="/home/gdikov/StereoVision/SemiframelessStereoMatching/"
-                                                             "data/head_exported",
+                                                     simulation_time=self.config['simulation']['duration'],
+                                                     timestamp_unit=self.config['input']['timestamp_unit'])
+                    frames_right, _ = load_frames(input_path=os.path.join(self.config['input']['frames_path'], 'right'),
                                                   resolution=self.config['input']['resolution'],
                                                   crop_region=self.config['input']['crop'],
-                                                  simulation_time=self.config['simulation']['duration'])
+                                                  simulation_time=self.config['simulation']['duration'],
+                                                  timestamp_unit=self.config['input']['timestamp_unit'])
                     logger.info("Setting up MRF belief propagation network for frame-based stereo matching.")
                     self.framebased_algorithm = \
                         FramebasedStereoMatching(algorithm=self.config['general']['framebased_algorithm'],
@@ -108,19 +109,21 @@ class HybridStereoMatching:
                 save_spikes(self.config['general'], prior_disparities)
             if self.config['simulation']['run_framebased']:
                 if not self.config['simulation']['run_eventbased']:
+                    logger.info("Loading pre-computed spiking network output.")
                     eventbased_output = latest_file_in_dir(self.config['general']['output_dir'], extension='pickle')
                     prior_disparities = load_spikes(eventbased_output)
-                frame_rate = 1000 // self.config['input']['frame_rate']
+                prior_buffer_interval = 1000 // self.config['input']['frame_rate'] // 4
                 prior_frames, timestamps = generate_frames_from_spikes(resolution=self.config['input']['resolution'],
                                                                        xs=prior_disparities['xs'],
                                                                        ys=prior_disparities['ys'],
                                                                        ts=prior_disparities['ts'],
                                                                        zs=prior_disparities['disps'],
-                                                                       time_interval=frame_rate)
+                                                                       time_interval=prior_buffer_interval,
+                                                                       pivots=self.framebased_algorithm.frames_timestamps)
                 prior_dict = {'priors': prior_frames, 'ts': timestamps}
                 self.framebased_algorithm.run(prior_dict)
                 depth_frames = self.framebased_algorithm.get_output()
-                save_frames(depth_frames)
+                save_frames(depth_frames, self.config['general']['output_dir'])
         else:
             raise NotImplementedError
 
