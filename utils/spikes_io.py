@@ -188,6 +188,7 @@ def load_spikes(input_file, crop_region=None, resolution=None, simulation_time=N
     Returns:
         A dict with 'left' and 'right' retina spiking times.
     """
+    logger.info("Loading spikes from {}".format(input_file))
     if os.path.splitext(os.path.basename(input_file))[1] == '.pickle':
         try:
             with open(input_file, 'rb') as fp:
