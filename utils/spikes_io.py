@@ -173,9 +173,12 @@ class SpikeParser:
         return events
 
 
-def load_spikes(input_file, crop_region=None, resolution=None, simulation_time=None, timestep_unit='us', dt_thresh=0):
+def load_spikes(input_file, crop_region=None, resolution=None,
+                simulation_time=None, timestep_unit='us', dt_thresh=0,
+                as_spike_source_array=True):
     """
-    Load the spikes form a file or a url into a list of populations each with lists of neuron spiking times. 
+    Load the spikes form a file or a url into a list of populations each with lists of neuron spiking times or 
+    as a list of individual spikes. 
      
     Args:
         input_file: path to input data file or a url
@@ -184,6 +187,8 @@ def load_spikes(input_file, crop_region=None, resolution=None, simulation_time=N
         simulation_time: simulation start and end time or simulation end time only
         timestep_unit: the units in which the timestamps are encoded. Can be 'us' or 'ms'.
         dt_thresh: shortest amount of time in which same pixels are not allowed to spike. 
+        as_spike_source_array: bool flag whether the loaded spikes should be packed into SpikeSourceArray-friendly 
+            object (list of lists of lists) or just as-is (list of spikes with timestamp, x, y, polarity)
 
     Returns:
         A dict with 'left' and 'right' retina spiking times.
@@ -202,6 +207,8 @@ def load_spikes(input_file, crop_region=None, resolution=None, simulation_time=N
     raw_data = parser.parse(input_file)
     if crop_region is not None or simulation_time is not None or dt_thresh > 0:
         filtered_data = parser.sanitise_events(raw_data, dt_thresh, assume_sorted=True)
+    if not as_spike_source_array:
+        return filtered_data
     logger.debug("Creating SpikeSourceArray spike-times objects.")
     # create lists of (populations) lists of (neuron's spiking times) lists and fill in the time values
     max_t = np.max([np.max(filtered_data['left'][:, 0]), np.max(filtered_data['right'][:, 0])]) + 10

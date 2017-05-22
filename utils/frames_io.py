@@ -143,7 +143,9 @@ def save_frames(frames, output_dir):
         imsave(os.path.join(full_output_dir, '{}.png'.format(i)), frame)
 
 
-def generate_frames_from_spikes(resolution, xs, ys, ts, zs=None, start_time=0, time_interval=100, pivots=None):
+def generate_frames_from_spikes(resolution, xs, ys, ts, zs=None,
+                                start_time=0, time_interval=100,
+                                pivots=None, non_pixel_value='nan'):
     """
     Generate frames from spikes given `x`, `y` coordinates, timestamp (`t`) for all spikes and possibly a 
     `z` fill value for the pixel.
@@ -157,13 +159,14 @@ def generate_frames_from_spikes(resolution, xs, ys, ts, zs=None, start_time=0, t
         start_time: optional, a starting time for the frames
         time_interval: optional, the time length of the buffering for each frame in milliseconds
         pivots: optional, a list of time ticks at which the frames are built (buffered `time_interval` ms before)
+        non_pixel_value: the value on the pixels where there is no data available
 
     Returns:
         A numpy array of shape N x *`resolution` representing the buffered frames.
     """
     logger.info("Generating {} frames from spikes".format(len(pivots) if pivots is not None
                                                           else int(np.max(ts)/time_interval)))
-    xs, ys, ts = np.asarray(xs), np.asarray(ys), np.asarray(ts)
+    xs, ys, ts = np.asarray(xs).astype(np.int), np.asarray(ys).astype(np.int), np.asarray(ts)
     zs = np.asarray(zs) if zs is not None else None
     # sort the spike times by time and use the sorted indices order to access the events in chronological order too
     sorted_indices = np.argsort(ts)
@@ -188,8 +191,12 @@ def generate_frames_from_spikes(resolution, xs, ys, ts, zs=None, start_time=0, t
     frames_count = len(indices_frames)
     frames_cols, frames_rows, frames_vals = zip(*[(xs[inds], ys[inds], zs[inds]) for inds in indices_frames])
     n_cols, n_rows = resolution
-    frames = np.zeros((frames_count, n_rows, n_cols), dtype=np.int32)
+    non_pixel_value = float(non_pixel_value)
+    frames = np.ones((frames_count, n_rows, n_cols)) * non_pixel_value
     for i, (cols, rows, vals) in enumerate(zip(frames_cols, frames_rows, frames_vals)):
+        if cols.size == 0:
+            # empty frame, skip value setting
+            continue
         # set pixel to 1 if spike has occurred at any time during the frame
         if zs is None:
             frames[i, rows, cols] = 1
