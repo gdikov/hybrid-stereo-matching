@@ -10,7 +10,7 @@ general:
 
 # input related configuration
 input:
-  spikes_path: /home/gdikov/StereoVision/SemiframelessStereoMatching/data/input/spikes/head_1left_0right.npz
+  spikes_path: /home/gdikov/StereoVision/SemiframelessStereoMatching/data/input/spikes/head.npz
   frames_path: /home/gdikov/StereoVision/SemiframelessStereoMatching/data/input/frames/head/
   frame_rate: 20                        # frames per second for the frame-based algorithm
   crop: !!python/tuple [55, 30]         # offset from the vertical and the horizontal border (top left pixel coordinate)
@@ -21,7 +21,7 @@ input:
 
 # simulation related configuration
 simulation:
-  run_eventbased: False    # whether to run the spiking algorithm
+  run_eventbased: True    # whether to run the spiking algorithm
   run_framebased: True    # whether to run the frame-based algorithm
   duration: 15000         # time in ms
   timestep: 0.2           # time in ms
