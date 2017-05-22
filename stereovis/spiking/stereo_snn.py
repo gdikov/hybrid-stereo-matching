@@ -52,7 +52,6 @@ class HierarchicalCooperativeNetwork(CooperativeNetwork):
                                                                 network_params=params,
                                                                 experiment_params=experiment_config,
                                                                 mode=operational_mode)
-        # TODO: init the fusion network
         raise NotImplementedError("Fusion Network is not supported yet.")
 
 

@@ -25,6 +25,9 @@ class FramebasedStereoMatching:
             # initialise the placeholder for the depth-resolved frames
             self.depth_frames = []
 
+    def get_timestamps(self):
+        return self.frames_timestamps
+
     def get_output(self):
         self.depth_frames = np.asarray(self.depth_frames)
         return self.depth_frames
@@ -44,8 +47,8 @@ class FramebasedStereoMatching:
         self.algorithm.loop_belief(image_left=image_left,
                                    image_right=image_right,
                                    prior=prior,
-                                   n_iter=5,
-                                   reinit_messages=False)
+                                   n_iter=10,
+                                   reinit_messages=True)
         depth_map = self.algorithm.get_map_belief()
         self.depth_frames.append(depth_map)
         return depth_map
@@ -61,22 +64,29 @@ class FramebasedStereoMatching:
             
         """
         n_frames = len(self.frames_timestamps)
-        if len(prior_info['ts']) > n_frames:
-            # pick the n closest ones (where n is the number of frames)
-            prior_indices = [np.searchsorted(prior_info['ts'], t_frame, side="left") for t_frame in self.frames_timestamps]
-            priors = prior_info['priors'][prior_indices]
+        if prior_info is not None:
+            if len(prior_info['ts']) > n_frames:
+                # pick the n closest ones (where n is the number of frames)
+                prior_indices = [np.searchsorted(prior_info['ts'], t_frame, side="left") for t_frame in self.frames_timestamps]
+                priors = prior_info['priors'][prior_indices]
+            else:
+                priors = prior_info['priors']
+            assert len(priors) == len(self.frames_left) == len(self.frames_right)
+
+            pb = ProgressBar(n_frames, "Starting offline frame-based stereo matching with prior initialisation.")
+            start_timer = time.time()
+            for left, right, prior in zip(self.frames_left, self.frames_right, priors):
+                self.run_next_frame(left, right, prior)
+                pb.update()
+            end_timer = time.time()
+            pb.end()
         else:
-            priors = prior_info['priors']
-        assert len(priors) == len(self.frames_left) == len(self.frames_right)
-
-        depth_frames = []
-
-        pb = ProgressBar(n_frames, "Starting offline frame-based stereo matching.")
-        start_timer = time.time()
-        for left, right, prior in zip(self.frames_left, self.frames_right, priors):
-            self.run_next_frame(left, right, prior)
-            pb.update()
-        end_timer = time.time()
-        pb.end()
+            pb = ProgressBar(n_frames, "Starting offline frame-based stereo matching without prior initialisation.")
+            start_timer = time.time()
+            for left, right in zip(self.frames_left, self.frames_right):
+                self.run_next_frame(left, right)
+                pb.update()
+            end_timer = time.time()
+            pb.end()
         logger.info("Frame-based stereo matching took {}s per image pair on average.".format((end_timer - start_timer)
                                                                                              / n_frames))

@@ -119,7 +119,9 @@ class HybridStereoMatching:
                                                                        ts=prior_disparities['ts'],
                                                                        zs=prior_disparities['disps'],
                                                                        time_interval=prior_buffer_interval,
-                                                                       pivots=self.framebased_algorithm.frames_timestamps)
+                                                                       pivots=self.framebased_algorithm.get_timestamps(),
+                                                                       non_pixel_value='nan')
+                save_frames(prior_frames, os.path.join(self.config['general']['output_dir'], 'prior_frames'))
                 prior_dict = {'priors': prior_frames, 'ts': timestamps}
                 self.framebased_algorithm.run(prior_dict)
                 depth_frames = self.framebased_algorithm.get_output()
