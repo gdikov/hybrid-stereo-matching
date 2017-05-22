@@ -62,8 +62,8 @@ class StereoMRF(object):
                 self._message_field['data'][l, ~prior_mask] = data_contrib[~prior_mask]
         else:
             for l in xrange(self.n_levels):
-                self._message_field['data'][l, :, :ncol - l] = np.abs(self.reference_image[:, l:]
-                                                                      - self.secondary_image[:, :ncol - l])
+                self._message_field['data'][l, :, l:] = np.abs(self.reference_image[:, l:]
+                                                               - self.secondary_image[:, :ncol - l])
 
     def _update_message_fields(self):
         """
