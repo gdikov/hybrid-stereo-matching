@@ -1,10 +1,10 @@
 # the general information is used for the experiment logging
 general:
   name: Pendulum
-  output_dir: /home/gdikov/StereoVision/SemiframelessStereoMatching/data/output
+  output_dir: /home/gdikov/StereoVision/SemiframelessStereoMatching/data/output/pendulum
   mode: offline
   eventbased_algorithm: tcd               # Temporal Coincidence Network `tcd` or Hierarchical Network `hn`
-  framebased_algorithm: mrf              # Markov Random Field `mrf` or `none` for event-based matching only
+  framebased_algorithm: none              # Markov Random Field `mrf` or `none` for event-based matching only
   network_params: default                 # will load stereovis/spiking/config/default_params.yaml
                                           # for neural, synaptic and topological parameters
 
@@ -21,8 +21,8 @@ input:
 
 # simulation related configuration
 simulation:
-  run_eventbased: False   # whether to run the spiking algorithm
-  run_framebased: True    # whether to run the frame-based algorithm
+  run_eventbased: True   # whether to run the spiking algorithm
+  run_framebased: False    # whether to run the frame-based algorithm
   duration: 10000         # time in ms
   timestep: 0.2           # time in ms
   n_chips:  6             # each has 850 cores

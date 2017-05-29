@@ -1,7 +1,6 @@
 from stereovis.hybrid_stereo import HybridStereoMatching
 
 
-if __name__ == '__main__':
-    stereo = HybridStereoMatching("/home/gdikov/StereoVision/SemiframelessStereoMatching/"
-                                  "experiments/configs/hybrid/head.yaml")
+def run_experiment_from_config(config_file):
+    stereo = HybridStereoMatching(config_file)
     stereo.run()
