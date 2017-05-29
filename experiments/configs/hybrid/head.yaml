@@ -10,8 +10,8 @@ general:
 
 # input related configuration
 input:
-  spikes_path: /home/gdikov/StereoVision/SemiframelessStereoMatching/data/input/spikes/head.npz
-  frames_path: /home/gdikov/StereoVision/SemiframelessStereoMatching/data/input/frames/head/
+  spikes_path: data/input/spikes/head.npz
+  frames_path: data/input/frames/head/
   frame_rate: 20                        # frames per second for the frame-based algorithm
   crop: !!python/tuple [55, 25]         # offset from the vertical and the horizontal border (top left pixel coordinate)
   resolution: !!python/tuple [115, 120]   # in pixels, first is resolution along x (horizontal) axis and then y axis
