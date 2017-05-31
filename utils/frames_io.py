@@ -143,9 +143,8 @@ def save_frames(frames, output_dir):
         imsave(os.path.join(full_output_dir, '{}.png'.format(i)), frame)
 
 
-def generate_frames_from_spikes(resolution, xs, ys, ts, zs=None,
-                                start_time=0, time_interval=100,
-                                pivots=None, non_pixel_value='nan'):
+def generate_frames_from_spikes(resolution, xs, ys, ts, zs=None, start_time=0, time_interval=100,
+                                pivots=None, non_pixel_value='nan', return_time_indices=False):
     """
     Generate frames from spikes given `x`, `y` coordinates, timestamp (`t`) for all spikes and possibly a 
     `z` fill value for the pixel.
@@ -160,6 +159,7 @@ def generate_frames_from_spikes(resolution, xs, ys, ts, zs=None,
         time_interval: optional, the time length of the buffering for each frame in milliseconds
         pivots: optional, a list of time ticks at which the frames are built (buffered `time_interval` ms before)
         non_pixel_value: the value on the pixels where there is no data available
+        return_time_indices: bool, whether the indices of the timestamps at which frames are created should be returned 
 
     Returns:
         A numpy array of shape N x *`resolution` representing the buffered frames.
@@ -204,4 +204,6 @@ def generate_frames_from_spikes(resolution, xs, ys, ts, zs=None,
         else:
             frames[i, rows, cols] = vals
 
+    if return_time_indices:
+        return frames, timestamps, indices_frames
     return frames, timestamps

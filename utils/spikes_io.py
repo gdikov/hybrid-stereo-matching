@@ -205,6 +205,7 @@ def load_spikes(input_file, crop_region=None, resolution=None,
 
     parser = SpikeParser(crop_region, resolution, simulation_time, timestep_unit)
     raw_data = parser.parse(input_file)
+    filtered_data = raw_data
     if crop_region is not None or simulation_time is not None or dt_thresh > 0:
         filtered_data = parser.sanitise_events(raw_data, dt_thresh, assume_sorted=True)
     if not as_spike_source_array:
