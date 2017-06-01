@@ -48,7 +48,7 @@ def plot_spikes(spikes, output_dir='data/output', image_naming='timestamps', res
         plt.gcf().clear()
 
 
-def plot_velocity_field(velocities, background=None):
+def plot_optical_flow(velocities, background=None):
     xs, ys, us, vs = velocities['xs'], velocities['ys'], velocities['vel_xs'], velocities['vel_ys']
     plt.figure()
     if background is not None:
@@ -59,10 +59,8 @@ def plot_velocity_field(velocities, background=None):
     colors = np.arctan2(us, vs)
 
     norm = Normalize()
-    norm.autoscale(colors)
-    # we need to normalize our colors array to match it colormap domain
-    # which is [0, 1]
-
+    if colors.size > 0:
+        norm.autoscale(colors)
     colormap = cm.inferno
     ax.quiver(xs, ys, us, vs, angles='xy', scale_units='xy', scale=1, color=colormap(norm(colors)))
     plt.draw()
