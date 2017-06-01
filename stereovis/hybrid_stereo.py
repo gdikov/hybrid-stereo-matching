@@ -48,7 +48,9 @@ class HybridStereoMatching:
                                      resolution=self.config['input']['resolution'],
                                      crop_region=self.config['input']['crop'],
                                      simulation_time=self.config['simulation']['duration'],
-                                     timestep_unit=self.config['input']['timestamp_unit'], dt_thresh=1)
+                                     timestep_unit=self.config['input']['timestamp_unit'],
+                                     dt_thresh=1,
+                                     scale_down_factor=self.config['input']['scale_down_factor'])
                 retina_left = create_retina(spikes['left'], label='retina_left')
                 retina_right = create_retina(spikes['right'], label='retina_right')
                 spiking_inputs = {'left': retina_left, 'right': retina_right}

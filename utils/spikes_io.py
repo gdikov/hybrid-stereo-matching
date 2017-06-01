@@ -12,14 +12,16 @@ logger = logging.getLogger(__file__)
 
 
 class SpikeParser:
-    def __init__(self, crop_region=None, resolution=None, simulation_time=None, timestep_unit='us'):
+    def __init__(self, crop_region=None, resolution=None, simulation_time=None,
+                 timestep_unit='us', scale_down_factor=(1, 1)):
         """
         Args:
             crop_region: a tuple of top left and bottom right pixel coordinates, which will be cropped from the 
              left and right retinas respectively. 
             resolution: a tuple of retina's x and y resolution (pixel count)
             simulation_time: a tuple with start and end time or an int with an end time
-            timestep_unit: the unit in which the events are recorded
+            timestep_unit: str, the unit in which the events are recorded
+            scale_down_factor: tuple, the downsampling factor in x and y direction.
         """
         # define the crop region by a top left and bottom right corner coordinates
         dx, dy = resolution
@@ -42,6 +44,7 @@ class SpikeParser:
             self.simulation_start_time = 0
 
         self.time_unit = timestep_unit
+        self.scale_down_factor = scale_down_factor
 
     def parse(self, input_data):
         """
@@ -166,16 +169,44 @@ class SpikeParser:
                 last_spikes[x, y] = t
             return event_list[allowed_indices]
 
+        # down-sample the events first and then filter the bursts, as this operation increases the event density.
+        # otherwise the dt_threshold constraint might be unsatisfied.
+        if self.scale_down_factor != (1, 1):
+            events['left'] = self.downsample(events['left'])
+            events['right'] = self.downsample(events['right'])
+
         # filter event bursts, i.e. spikes which occur faster than a dt_threshold
         logger.debug("Filtering event bursts within time interval of {}ms.".format(dt_threshold))
         events['left'] = apply_time_filter(events['left'])
         events['right'] = apply_time_filter(events['right'])
+
+        return events
+
+    def downsample(self, events, mode='skip'):
+        """
+        Down-sample the resolution of the events.
+         
+        Args:
+            events: a numpy array with the events containing a timestamp, x, y coordinate and polarity.
+            mode: str, the way events are down-sampled. Can be `aggregate` for combining adjacent pixel to 
+                map to the same down-sampled one, or `skip` to skip all but the n-th pixel. The latter results in more 
+                sparse and naturally looking result.
+
+        Returns:
+            The modified, down-sampled events.
+        """
+        if mode == 'aggregate':
+            events[:, 1:3] /= np.asarray(self.scale_down_factor)
+        elif mode == 'skip':
+            events = events[(events[:, 1] % self.scale_down_factor[0] == 0)
+                            & (events[:, 2] % self.scale_down_factor[1] == 0)]
+            events[:, 1:3] /= np.asarray(self.scale_down_factor)
         return events
 
 
 def load_spikes(input_file, crop_region=None, resolution=None,
                 simulation_time=None, timestep_unit='us', dt_thresh=0,
-                as_spike_source_array=True):
+                scale_down_factor=(1, 1), as_spike_source_array=False):
     """
     Load the spikes form a file or a url into a list of populations each with lists of neuron spiking times or 
     as a list of individual spikes. 
@@ -187,6 +218,7 @@ def load_spikes(input_file, crop_region=None, resolution=None,
         simulation_time: simulation start and end time or simulation end time only
         timestep_unit: the units in which the timestamps are encoded. Can be 'us' or 'ms'.
         dt_thresh: shortest amount of time in which same pixels are not allowed to spike. 
+        scale_down_factor: tuple, the down-sampling factor for the resolution.
         as_spike_source_array: bool flag whether the loaded spikes should be packed into SpikeSourceArray-friendly 
             object (list of lists of lists) or just as-is (list of spikes with timestamp, x, y, polarity)
 
@@ -203,7 +235,8 @@ def load_spikes(input_file, crop_region=None, resolution=None,
             spikes = None
         return spikes
 
-    parser = SpikeParser(crop_region, resolution, simulation_time, timestep_unit)
+    parser = SpikeParser(crop_region=crop_region, resolution=resolution, simulation_time=simulation_time,
+                         timestep_unit=timestep_unit, scale_down_factor=scale_down_factor)
     raw_data = parser.parse(input_file)
     filtered_data = raw_data
     if crop_region is not None or simulation_time is not None or dt_thresh > 0:
