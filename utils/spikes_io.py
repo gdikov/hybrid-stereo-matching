@@ -174,6 +174,7 @@ class SpikeParser:
         if self.scale_down_factor != (1, 1):
             events['left'] = self.downsample(events['left'])
             events['right'] = self.downsample(events['right'])
+            self.effective_resolution = np.asarray(self.effective_resolution) / np.asarray(self.scale_down_factor)
 
         # filter event bursts, i.e. spikes which occur faster than a dt_threshold
         logger.debug("Filtering event bursts within time interval of {}ms.".format(dt_threshold))
@@ -237,6 +238,7 @@ def load_spikes(input_file, crop_region=None, resolution=None,
 
     parser = SpikeParser(crop_region=crop_region, resolution=resolution, simulation_time=simulation_time,
                          timestep_unit=timestep_unit, scale_down_factor=scale_down_factor)
+    logger.debug("Effective retina resolution after pre-processing is {}".format(parser.effective_resolution))
     raw_data = parser.parse(input_file)
     filtered_data = raw_data
     if crop_region is not None or simulation_time is not None or dt_thresh > 0:

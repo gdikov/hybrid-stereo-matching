@@ -13,7 +13,7 @@ logger = logging.getLogger(__file__)
 
 
 class TemporalCoincidenceDetectionNetwork:
-    def __init__(self, input_sources=None, network_params=None, experiment_params=None, mode='offline'):
+    def __init__(self, input_sources, network_params=None, experiment_params=None, mode='offline'):
         """
         Args:
             input_sources: a dict of left and right view event inputs as SpikeSourceArrays 
@@ -30,8 +30,7 @@ class TemporalCoincidenceDetectionNetwork:
             self.params = load_config(os.path.join(path_to_params, network_params + '_params.yaml'))
         self.max_disparity = experiment_params['max_disparity']
         self.min_disparity = experiment_params['min_disparity']
-        self.retina_n_cols = experiment_params['resolution'][0]
-        self.retina_n_rows = experiment_params['resolution'][1]
+        self.retina_n_cols, self.retina_n_rows = input_sources['resolution']
 
         if self.min_disparity > 0:
             logger.warning("Detected invalid minimum disparity of {}. "

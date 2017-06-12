@@ -1,9 +1,5 @@
-import os
 import logging
-
 import spynnaker.pyNN as pyNN
-
-from utils.config import load_config
 
 logger = logging.getLogger(__file__)
 
@@ -41,6 +37,8 @@ class Retina(object):
         Returns:
             In-place method
         """
+        logger.info("Initialising {} SpikeSourceArray with resolution {}.".format(self.label, (self.n_cols,
+                                                                                               self.n_rows)))
         if spike_times is not None:
             for col_id, col in enumerate(spike_times):
                 col_of_pixels = pyNN.Population(size=self.n_rows,

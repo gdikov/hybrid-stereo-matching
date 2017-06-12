@@ -50,10 +50,12 @@ class HybridStereoMatching:
                                      simulation_time=self.config['simulation']['duration'],
                                      timestep_unit=self.config['input']['timestamp_unit'],
                                      dt_thresh=1,
-                                     scale_down_factor=self.config['input']['scale_down_factor'])
+                                     scale_down_factor=self.config['input']['scale_down_factor'],
+                                     as_spike_source_array=True)
                 retina_left = create_retina(spikes['left'], label='retina_left')
                 retina_right = create_retina(spikes['right'], label='retina_right')
-                spiking_inputs = {'left': retina_left, 'right': retina_right}
+                spiking_inputs_resolution = (len(retina_left), len(retina_left[0]))
+                spiking_inputs = {'left': retina_left, 'right': retina_right, 'resolution': spiking_inputs_resolution}
             if self.config['simulation']['run_framebased']:
                 if self.config['general']['framebased_algorithm'] != 'none':
                     logger.info("Preparing frames for the frame-based stereo matching.")

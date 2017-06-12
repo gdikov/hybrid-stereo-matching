@@ -1,8 +1,7 @@
-from utils.spikes_io import load_spikes
 from utils.frames_io import generate_frames_from_spikes
 import numpy as np
 import matplotlib.pyplot
-# matplotlib.use('Agg')
+matplotlib.use('Agg')
 import matplotlib.cm as cm
 from matplotlib.colors import Normalize
 import matplotlib.pyplot as plt
