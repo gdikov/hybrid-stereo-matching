@@ -1,19 +1,27 @@
 # the general information is used for the experiment logging
 general:
   name: Letters
-  output_dir: ../data/output
+  output_dir: output/nst
+  mode: offline
+  eventbased_algorithm: tcd               # Temporal Coincidence Network `tcd` or Hierarchical Network `hn`
+  framebased_algorithm: none              # Markov Random Field `mrf` or `none` for event-based matching only
+  network_params: default                 # will load stereovis/spiking/config/default_params.yaml
+                                          # for neural, synaptic and topological parameters
 
 # input related configuration
 input:
-  path: ../data/spiking/NSTlogo_disp12-8-3.dat
+  spikes_path: data/input/spikes/NSTlogo_disp12-8-3.dat
   crop: !!python/tuple [40, 50]         # offset from the vertical and the horizontal border (top left pixel coordinate)
   resolution: !!python/tuple [44, 30]   # in pixels, first is resolution along x (horizontal) axis and then y axis
-  max_disparity: 24                     # maximum detectable disparity.
+  max_disparity: 16                     # maximum detectable disparity.
   min_disparity: 0
   timestamp_unit: us
+  scale_down_factor: !!python/tuple [1, 1]
 
 # simulation related configuration
 simulation:
-  duration: 10000     # time in ms
-  time_step: 0.2      # time in ms
-  n_chips:  6         # each has 850 cores
+  run_eventbased: True    # whether to run the spiking algorithm
+  run_framebased: False    # whether to run the frame-based algorithm
+  duration: 10000         # time in ms
+  timestep: 0.2           # time in ms
+  n_chips:  100             # each can simulate up to 16 populations
