@@ -1,13 +1,13 @@
-import os
+import itertools as it
 import logging
+import os
 
 import numpy as np
 import scipy.sparse as sps
-import itertools as it
 import spynnaker.pyNN as pyNN
+from stereovis.utils.config import load_config
 
-from utils.config import load_config
-from utils.helpers import pairs_of_neighbours
+from stereovis.utils.helpers import pairs_of_neighbours
 
 logger = logging.getLogger(__file__)
 

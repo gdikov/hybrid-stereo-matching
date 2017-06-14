@@ -7,7 +7,7 @@ import logging
 logger = logging.getLogger(__file__)
 
 
-class CooperativeNetwork:
+class SpikingNeuralNetwork:
     def __init__(self, spike_sources):
         self.retina_inputs = spike_sources
 
@@ -45,19 +45,9 @@ class CooperativeNetwork:
         pyNN.end()
 
 
-class HierarchicalCooperativeNetwork(CooperativeNetwork):
+class CooperativeNetwork(SpikingNeuralNetwork):
     def __init__(self, spiking_inputs, params=None, experiment_config=None, operational_mode='offline'):
-        CooperativeNetwork.__init__(self, spiking_inputs)
-        self.temporal_net = TemporalCoincidenceDetectionNetwork(input_sources=self.retina_inputs,
-                                                                network_params=params,
-                                                                experiment_params=experiment_config,
-                                                                mode=operational_mode)
-        raise NotImplementedError("Fusion Network is not supported yet.")
-
-
-class BasicCooperativeNetwork(CooperativeNetwork):
-    def __init__(self, spiking_inputs, params=None, experiment_config=None, operational_mode='offline'):
-        CooperativeNetwork.__init__(self, spiking_inputs)
+        SpikingNeuralNetwork.__init__(self, spiking_inputs)
         logger.debug("Creating Basic Cooperative Network instance, consisting "
                      "in a Temporal Coincidence Detection module only.")
         self.network = TemporalCoincidenceDetectionNetwork(input_sources=self.retina_inputs,
