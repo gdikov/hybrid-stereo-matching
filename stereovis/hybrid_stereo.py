@@ -41,6 +41,12 @@ class HybridStereoMatching:
                        threads=4)
         else:
             logger.info("Skipping spiking stereo matching algorithm initialisation.")
+
+        self.effective_frame_resolution = (self.config['input']['resolution'][0] /
+                                           self.config['input']['scale_down_factor'][0],
+                                           self.config['input']['resolution'][1] /
+                                           self.config['input']['scale_down_factor'][1])
+
         if self.config['general']['mode'] == 'offline':
             if self.config['simulation']['run_eventbased']:
                 logger.info("Preparing spike sources for offline mode.")
@@ -62,22 +68,23 @@ class HybridStereoMatching:
                     frames_left, times = load_frames(input_path=os.path.join(self.config['input']['frames_path'], 'left'),
                                                      resolution=self.config['input']['resolution'],
                                                      crop_region=self.config['input']['crop'],
+                                                     scale_down_factor=self.config['input']['scale_down_factor'],
                                                      simulation_time=self.config['simulation']['duration'],
                                                      timestamp_unit=self.config['input']['timestamp_unit'])
                     frames_right, _ = load_frames(input_path=os.path.join(self.config['input']['frames_path'], 'right'),
                                                   resolution=self.config['input']['resolution'],
                                                   crop_region=self.config['input']['crop'],
+                                                  scale_down_factor=self.config['input']['scale_down_factor'],
                                                   simulation_time=self.config['simulation']['duration'],
                                                   timestamp_unit=self.config['input']['timestamp_unit'])
                     logger.info("Setting up MRF belief propagation network for frame-based stereo matching.")
                     self.framebased_algorithm = \
                         FramebasedStereoMatching(algorithm=self.config['general']['framebased_algorithm'],
-                                                 resolution=self.config['input']['resolution'],
+                                                 resolution=self.effective_frame_resolution,
                                                  max_disparity=self.config['input']['max_disparity'],
                                                  frames={'left': frames_left, 'right': frames_right, 'ts': times})
                 else:
-                    raise ValueError("The configuration parameters make no sense. "
-                                     "When running a frame-based stereo matching, provide also the algorithm type.")
+                    raise ValueError("When running a frame-based stereo matching, provide also the algorithm type.")
             else:
                 logger.warning("Skipping frame-based stereo matching algorithm initialisation.")
         else:
@@ -116,15 +123,20 @@ class HybridStereoMatching:
                     logger.info("Loading pre-computed spiking network output.")
                     eventbased_output = latest_file_in_dir(self.config['general']['output_dir'], extension='pickle')
                     prior_disparities = load_spikes(eventbased_output)
+                    effective_frame_resolution = prior_disparities['meta']['resolution']
+                else:
+                    effective_frame_resolution = self.effective_frame_resolution
+
                 prior_buffer_interval = 1000 // self.config['input']['frame_rate'] // 4
-                prior_frames, timestamps = generate_frames_from_spikes(resolution=self.config['input']['resolution'],
+                pivots = self.framebased_algorithm.get_timestamps()
+                prior_frames, timestamps = generate_frames_from_spikes(resolution=effective_frame_resolution,
                                                                        xs=prior_disparities['xs'],
                                                                        ys=prior_disparities['ys'],
                                                                        ts=prior_disparities['ts'],
                                                                        zs=prior_disparities['disps'],
                                                                        time_interval=prior_buffer_interval,
-                                                                       pivots=self.framebased_algorithm.get_timestamps(),
-                                                                       non_pixel_value='nan')
+                                                                       pivots=pivots,
+                                                                       non_pixel_value=-1)
                 save_frames(prior_frames, os.path.join(self.config['general']['output_dir'], 'prior_frames'))
                 prior_dict = {'priors': prior_frames, 'ts': timestamps}
                 self.framebased_algorithm.run(prior_dict)

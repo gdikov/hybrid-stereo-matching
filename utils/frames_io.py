@@ -1,9 +1,15 @@
 import re
 import numpy as np
 import os
+import logging
+import matplotlib as mpl
+mpl.use('Agg')
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+
 from datetime import datetime as dt
 from skimage.io import imread, imsave
-import logging
+from skimage.transform import rescale
 
 logger = logging.getLogger(__file__)
 
@@ -64,7 +70,8 @@ def load_ground_truth(filename):
         raise ValueError("Unknown file type")
 
 
-def load_frames(input_path, crop_region=None, resolution=None, simulation_time=None, timestamp_unit='us'):
+def load_frames(input_path, crop_region=None, resolution=None, scale_down_factor=(1, 1),
+                simulation_time=None, timestamp_unit='us'):
     """
     Load the input frames, sorted by time and possibly cropped to some resolution in some region. 
     
@@ -72,6 +79,7 @@ def load_frames(input_path, crop_region=None, resolution=None, simulation_time=N
         input_path: the path to the images or a path to a single file (all in png format)
         crop_region: top left corner for the bounding box of the region of interest
         resolution: the shape of the image to be read
+        scale_down_factor: tuple of the x and y down-sampling factors
         simulation_time: the start and stop time or stop time of the simulation, used to take the frames of interest.
         timestamp_unit: the units of time for the timestamps. Can be `us` or `ms`.
 
@@ -85,6 +93,11 @@ def load_frames(input_path, crop_region=None, resolution=None, simulation_time=N
         col_stop, row_stop = col_start + dx, row_start + dy
     else:
         col_start, col_stop, row_start, row_stop = 0, 0, 0, 0
+    scale_down_factor = np.asarray(scale_down_factor)
+
+    def downsample(img):
+        rescaled_img = rescale(img, 1.0 / scale_down_factor, preserve_range=True)
+        return rescaled_img
 
     if os.path.isdir(input_path):
         if isinstance(simulation_time, tuple):
@@ -92,7 +105,7 @@ def load_frames(input_path, crop_region=None, resolution=None, simulation_time=N
         elif isinstance(simulation_time, int):
             min_t, max_t = 0, simulation_time
         else:
-            min_t, max_t = 0, np.iinfo(np.int64).max
+            min_t, max_t = 0, np.iinfo(np.int32).max
 
         # since image names encode the timestamps sorting by them is equivalent to sorting by time
         image_files = [os.path.join(input_path, str(i) + '.png') for i in
@@ -101,9 +114,9 @@ def load_frames(input_path, crop_region=None, resolution=None, simulation_time=N
                        if min_t <= i <= max_t]
 
         if not (col_stop or col_start or row_stop or row_start):
-            images = np.stack([imread(img) for img in image_files])
+            images = np.stack([downsample(imread(img)) for img in image_files])
         else:
-            images = np.stack([imread(img)[row_start:row_stop, col_start:col_stop] for img in image_files])
+            images = np.stack([downsample(imread(img)[row_start:row_stop, col_start:col_stop]) for img in image_files])
 
         # load the timestamps if available
         timestamps_file = os.path.join(input_path, 'timestamps.npy')
@@ -118,9 +131,9 @@ def load_frames(input_path, crop_region=None, resolution=None, simulation_time=N
 
     else:
         if not (col_stop or col_start or row_stop or row_start):
-            return imread(input_path), None
+            return downsample(imread(input_path)), None
         else:
-            return imread(input_path)[row_start:row_stop, col_start:col_stop], None
+            return downsample(imread(input_path)[row_start:row_stop, col_start:col_stop]), None
 
 
 def save_frames(frames, output_dir):
@@ -139,8 +152,17 @@ def save_frames(frames, output_dir):
     if not os.path.exists(full_output_dir):
         os.makedirs(full_output_dir)
     logger.info("Saving frames to {}".format(full_output_dir))
+    min_val, max_val = np.min(frames), np.max(frames)
+    cmap = plt.get_cmap('jet', int(max_val))
+    cmap.set_under('gray')
+    cmap.set_bad('gray')
     for i, frame in enumerate(frames):
-        imsave(os.path.join(full_output_dir, '{}.png'.format(i)), frame)
+        # frame = ((frame / float(max_val) - min_val) * 255).astype(np.int8)
+        # imsave(os.path.join(full_output_dir, '{}.png'.format(i)), frame)
+        plt.imshow(frame, interpolation='none', vmin=min_val+0.1, vmax=max_val, cmap=cmap)
+        plt.colorbar()
+        plt.savefig(os.path.join(full_output_dir, '{}.png'.format(i)))
+        plt.gcf().clear()
 
 
 def generate_frames_from_spikes(resolution, xs, ys, ts, zs=None, start_time=0, time_interval=100,
@@ -175,16 +197,16 @@ def generate_frames_from_spikes(resolution, xs, ys, ts, zs=None, start_time=0, t
     sorted_time = sorted_time[sorted_time >= start_time]
     sorted_indices = sorted_indices[sorted_indices.size - sorted_time.size:]
 
-    # compute the differences in spiking times and split the whole event stream into time-wise equally sized frames
     if pivots is None:
+        # compute the differences in spiking times and split the whole event stream into time-wise equally sized frames
         frame_ticks_indices = np.convolve(sorted_time % time_interval, [1, -1], mode='valid') < 0
         frame_ticks_indices = np.where(np.concatenate([np.array([False]), frame_ticks_indices]))[0]
         timestamps = sorted_time[frame_ticks_indices]
         # clip the end since there is no timestamp information for it and the frame may be incomplete.
         indices_frames = np.split(sorted_indices, frame_ticks_indices)[:-1]
     else:
-        indices_frames = [np.where(np.logical_and(sorted_time >= tick - time_interval, sorted_time <= tick))[0]
-                          for tick in pivots]
+        indices_frames = [sorted_indices[np.where(np.logical_and(sorted_time >= tick - time_interval,
+                                                                 sorted_time <= tick))[0]] for tick in pivots]
         timestamps = pivots
 
     # buffer the events into frames

@@ -1,11 +1,12 @@
-from utils.frames_io import generate_frames_from_spikes
 import numpy as np
-import matplotlib.pyplot
+import os
+import matplotlib
 matplotlib.use('Agg')
 import matplotlib.cm as cm
-from matplotlib.colors import Normalize
 import matplotlib.pyplot as plt
-import os
+
+from matplotlib.colors import Normalize
+from utils.frames_io import generate_frames_from_spikes
 
 
 def plot_spikes(spikes, output_dir='data/output', image_naming='timestamps', resolution=(240, 180),

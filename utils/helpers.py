@@ -55,5 +55,5 @@ def latest_file_in_dir(dirname, extension='*', mode='creation'):
         key_ = os.path.getctime
     elif mode == 'modification':
         key_ = os.path.getmtime
-    latest_file = min(glob.iglob(os.path.join(dirname, '*.' + extension)), key=key_)
+    latest_file = max(glob.iglob(os.path.join(dirname, '*.' + extension)), key=key_)
     return latest_file
