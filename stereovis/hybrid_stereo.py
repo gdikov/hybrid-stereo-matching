@@ -4,6 +4,7 @@ import os
 import spynnaker.pyNN as pyNN
 
 from framed.stereo_framebased import FramebasedStereoMatching
+from framed.algorithms import VelocityField
 from spiking.nn_modules.spike_source import create_retina
 from spiking.stereo_snn import CooperativeNetwork
 from stereovis.utils.helpers import latest_file_in_dir
@@ -33,9 +34,9 @@ class HybridStereoMatching(object):
         if self.config['general']['mode'] == 'online':
             raise NotImplementedError("Online operational mode is not supported yet.")
 
-        self.effective_frame_resolution = (self.config['input']['resolution'][0] /
+        self.effective_frame_resolution = (self.config['input']['resolution'][0] //
                                            self.config['input']['scale_down_factor'][0],
-                                           self.config['input']['resolution'][1] /
+                                           self.config['input']['resolution'][1] //
                                            self.config['input']['scale_down_factor'][1])
 
         if self.config['simulation']['run_eventbased']:
@@ -74,29 +75,31 @@ class HybridStereoMatching(object):
             logger.info("Skipping spiking stereo matching algorithm initialisation.")
 
         if self.config['simulation']['run_framebased']:
-            if self.config['general']['framebased_algorithm'] != 'none':
-                logger.info("Preparing frames for the frame-based stereo matching.")
-                frames_left, times = load_frames(
-                    input_path=os.path.join(self.config['input']['frames_path'], 'left'),
-                    resolution=self.config['input']['resolution'],
-                    crop_region=self.config['input']['crop'],
-                    scale_down_factor=self.config['input']['scale_down_factor'],
-                    simulation_time=self.config['simulation']['duration'],
-                    timestamp_unit=self.config['input']['timestamp_unit'])
-                frames_right, _ = load_frames(input_path=os.path.join(self.config['input']['frames_path'], 'right'),
-                                              resolution=self.config['input']['resolution'],
-                                              crop_region=self.config['input']['crop'],
-                                              scale_down_factor=self.config['input']['scale_down_factor'],
-                                              simulation_time=self.config['simulation']['duration'],
-                                              timestamp_unit=self.config['input']['timestamp_unit'])
-                logger.info("Setting up MRF belief propagation network for frame-based stereo matching.")
-                self.framebased_algorithm = \
-                    FramebasedStereoMatching(algorithm=self.config['general']['framebased_algorithm'],
-                                             resolution=self.effective_frame_resolution,
-                                             max_disparity=self.config['input']['max_disparity'],
-                                             frames={'left': frames_left, 'right': frames_right, 'ts': times})
-            else:
-                raise ValueError("When running a frame-based stereo matching, provide also the algorithm type.")
+            logger.info("Preparing frames for the frame-based stereo matching.")
+            frames_left, times = load_frames(
+                input_path=os.path.join(self.config['input']['frames_path'], 'left'),
+                resolution=self.config['input']['resolution'],
+                crop_region=self.config['input']['crop'],
+                scale_down_factor=self.config['input']['scale_down_factor'],
+                simulation_time=self.config['simulation']['duration'],
+                timestamp_unit=self.config['input']['timestamp_unit'])
+            frames_right, _ = load_frames(input_path=os.path.join(self.config['input']['frames_path'], 'right'),
+                                          resolution=self.config['input']['resolution'],
+                                          crop_region=self.config['input']['crop'],
+                                          scale_down_factor=self.config['input']['scale_down_factor'],
+                                          simulation_time=self.config['simulation']['duration'],
+                                          timestamp_unit=self.config['input']['timestamp_unit'])
+            logger.info("Setting up MRF belief propagation network for frame-based stereo matching.")
+            self.framebased_algorithm = \
+                FramebasedStereoMatching(algorithm=self.config['general']['framebased_algorithm'],
+                                         resolution=self.effective_frame_resolution,
+                                         max_disparity=self.config['input']['max_disparity'],
+                                         inputs={'left': frames_left, 'right': frames_right, 'ts': times})
+            if self.config['general']['use_prior_adjustment']:
+                logger.info("Setting up Velocity Field estimation for prior adjustment.")
+                self.prior_adjustment_algorithm = VelocityField(time_interval=20,
+                                                                neighbourhood_size=(3, 3),
+                                                                min_num_events_in_timespace_interval=5)
         else:
             logger.info("Skipping frame-based stereo matching algorithm initialisation.")
 
@@ -110,7 +113,8 @@ class HybridStereoMatching(object):
         if self.config['simulation']['run_eventbased']:
             self.eventbased_algorithm.run(self.config['simulation']['duration'])
             prior_disparities = self.eventbased_algorithm.get_output()
-            save_spikes(self.config['general'], prior_disparities)
+            save_spikes(self.config['general']['output_dir'], prior_disparities,
+                        experiment_name=self.config['general']['name'])
             effective_frame_resolution = self.effective_frame_resolution
         else:
             logger.info("Loading pre-computed spiking network output.")
@@ -119,6 +123,8 @@ class HybridStereoMatching(object):
             effective_frame_resolution = prior_disparities['meta']['resolution']
 
         if self.config['simulation']['run_framebased']:
+            if self.config['general']['use_prior_adjustment']:
+                self.prior_adjustment_algorithm.compute_velocity_field()
             prior_buffer_interval = 1000 // self.config['input']['frame_rate'] // 4
             pivots = self.framebased_algorithm.get_timestamps()
             prior_frames, timestamps = generate_frames_from_spikes(resolution=effective_frame_resolution,
