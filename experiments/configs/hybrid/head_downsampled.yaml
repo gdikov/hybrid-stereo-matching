@@ -3,8 +3,8 @@ general:
   name: Head_downsampled                        # the experiment name, used for logging purposes
   output_dir: output/head_downsampled           # path to directory where the output depth frames and events will be written to
   mode: offline                                 # only offline mode is supported for now
-  eventbased_algorithm: tcd                     # Temporal Coincidence Network `tcd`
-  framebased_algorithm: mrf                     # Markov Random Field `mrf` or `none` for event-based matching only
+  eventbased_algorithm: tcd                     # Temporal Coincidence Network `tcd` is supported only
+  framebased_algorithm: mrf                     # Markov Random Field `mrf` is supported only
   use_prior_adjustment: False                   # whether to use optical flow on retinal input for adjusting the depth events injection
   network_params: default                       # will load stereovis/spiking/config/default_params.yaml
                                                 # for neural, synaptic and topological parameters

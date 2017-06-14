@@ -2,7 +2,7 @@ import numpy as np
 from scipy.linalg import lstsq
 
 
-class VelocityField:
+class VelocityVectorField:
     """
     Implementation of the [1] "Event-Based Visual Flow, R. Benosman et. al., IEEE TNNLS, VOL. 25, NO. 2, 2014" algorithm
     for optical flow using event-based vision sensors. 
@@ -106,7 +106,7 @@ class VelocityField:
         return all_velocities
 
 # if __name__ == '__main__':
-#     vf = VelocityField()
+#     vf = VelocityVectorField()
 #
 #     # events = np.array([[1, 2, 2, 0],
 #     #                    [1.2, 3, 2, 0],
