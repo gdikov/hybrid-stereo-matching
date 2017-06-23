@@ -10,7 +10,7 @@ logger = logging.getLogger(__file__)
 
 
 class OpticalFlowPixelCorrection(object):
-    def __init__(self, resolution, reference_events=None, algorithm='vvf'):
+    def __init__(self, resolution, reference_events, algorithm='vvf'):
         if algorithm == 'vvf':
             self.algorithm = VelocityVectorField()
             self.event_frames, _, self.time_ind = generate_frames_from_spikes(resolution=resolution,
@@ -22,6 +22,7 @@ class OpticalFlowPixelCorrection(object):
                                                                               pivots=None,
                                                                               non_pixel_value=-1,
                                                                               return_time_indices=True)
+            self.velocity_field = None
         else:
             raise NotImplementedError("Only VRF is supported.")
 
@@ -29,7 +30,8 @@ class OpticalFlowPixelCorrection(object):
         n_frames = len(self.event_frames)
         pb = ProgressBar(n_frames, "Starting velocity field estimation for prior adjustment.")
         start_timer = time.time()
-        # TODO: compute the whole events time-varying velocity field, not only per frame...
+        vs = None
+        # FIXME: compute the whole events time-varying velocity field, not only per frame...
         for i, frame in enumerate(self.event_frames):
             vs = self.algorithm.fit_velocity_field(self.event_frames['right'][self.time_ind[i], :],
                                                    assume_sorted=False)
@@ -48,7 +50,15 @@ class OpticalFlowPixelCorrection(object):
             events: ndarray, the events which will be adjusted from the pre-computed velocity field
 
         Returns:
+            Corrected events according to the velocity direction.
 
+        Notes:
+            The shift amounts to at most one pixel.
         """
+        if self.velocity_field is None:
+            self.compute_velocity_field()
+        for e in events:
+            pass
+
 
 

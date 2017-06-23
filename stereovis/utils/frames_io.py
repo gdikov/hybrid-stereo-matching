@@ -2,13 +2,12 @@ import re
 import numpy as np
 import os
 import logging
-import matplotlib as mpl
-mpl.use('Agg')
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 
 from datetime import datetime as dt
-from skimage.io import imread, imsave
+from skimage.io import imread
 from skimage.transform import rescale
 
 logger = logging.getLogger(__file__)
@@ -31,9 +30,9 @@ def load_ground_truth(filename):
         depth = int(fp.readline())
         assert depth <= 255
         raster = []
-        for y in range(height):
+        for i in range(height):
             row = []
-            for y in range(width):
+            for j in range(width):
                 row.append(ord(fp.read(1)))
             raster.append(row)
         return np.asarray(raster) / 14
@@ -57,7 +56,6 @@ def load_ground_truth(filename):
         # little endian
         if scale < 0:
             endian = '<'
-            scale = -scale
         # big endian
         else:
             endian = '>'
@@ -95,8 +93,8 @@ def load_frames(input_path, crop_region=None, resolution=None, scale_down_factor
         col_start, col_stop, row_start, row_stop = 0, 0, 0, 0
     scale_down_factor = np.asarray(scale_down_factor)
 
-    def downsample(img):
-        rescaled_img = rescale(img, 1.0 / scale_down_factor, preserve_range=True)
+    def downsample(image_to_scale):
+        rescaled_img = rescale(image_to_scale, 1.0 / scale_down_factor, preserve_range=True)
         return rescaled_img
 
     if os.path.isdir(input_path):

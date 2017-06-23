@@ -172,6 +172,7 @@ class SpikeParser:
         # down-sample the events first and then filter the bursts, as this operation increases the event density.
         # otherwise the dt_threshold constraint might be unsatisfied.
         if self.scale_down_factor != (1, 1):
+            logger.debug("Performing downscaling.")
             events['left'] = self.downsample(events['left'])
             events['right'] = self.downsample(events['right'])
             self.effective_resolution = np.asarray(self.effective_resolution) / np.asarray(self.scale_down_factor)

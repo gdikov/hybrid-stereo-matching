@@ -4,7 +4,7 @@ import os
 import spynnaker.pyNN as pyNN
 
 from framed.stereo_framebased import FramebasedStereoMatching
-from framed.algorithms import VelocityField
+from spiking.optical_flow_correction import OpticalFlowPixelCorrection
 from spiking.nn_modules.spike_source import create_retina
 from spiking.stereo_snn import CooperativeNetwork
 from stereovis.utils.helpers import latest_file_in_dir
@@ -49,16 +49,16 @@ class HybridStereoMatching(object):
                        threads=4)
 
             logger.info("Preparing spike sources for offline mode.")
-            spikes = load_spikes(input_file=self.config['input']['spikes_path'],
-                                 resolution=self.config['input']['resolution'],
-                                 crop_region=self.config['input']['crop'],
-                                 simulation_time=self.config['simulation']['duration'],
-                                 timestep_unit=self.config['input']['timestamp_unit'],
-                                 dt_thresh=1,
-                                 scale_down_factor=self.config['input']['scale_down_factor'],
-                                 as_spike_source_array=True)
-            retina_left = create_retina(spikes['left'], label='retina_left')
-            retina_right = create_retina(spikes['right'], label='retina_right')
+            retina_spikes = load_spikes(input_file=self.config['input']['spikes_path'],
+                                        resolution=self.config['input']['resolution'],
+                                        crop_region=self.config['input']['crop'],
+                                        simulation_time=self.config['simulation']['duration'],
+                                        timestep_unit=self.config['input']['timestamp_unit'],
+                                        dt_thresh=1,
+                                        scale_down_factor=self.config['input']['scale_down_factor'],
+                                        as_spike_source_array=True)
+            retina_left = create_retina(retina_spikes['left'], label='retina_left')
+            retina_right = create_retina(retina_spikes['right'], label='retina_right')
             spiking_inputs_resolution = (len(retina_left), len(retina_left[0]))
             spiking_inputs = {'left': retina_left, 'right': retina_right, 'resolution': spiking_inputs_resolution}
 
@@ -76,19 +76,20 @@ class HybridStereoMatching(object):
 
         if self.config['simulation']['run_framebased']:
             logger.info("Preparing frames for the frame-based stereo matching.")
-            frames_left, times = load_frames(
-                input_path=os.path.join(self.config['input']['frames_path'], 'left'),
-                resolution=self.config['input']['resolution'],
-                crop_region=self.config['input']['crop'],
-                scale_down_factor=self.config['input']['scale_down_factor'],
-                simulation_time=self.config['simulation']['duration'],
-                timestamp_unit=self.config['input']['timestamp_unit'])
+            frames_left, times = load_frames(input_path=os.path.join(self.config['input']['frames_path'], 'left'),
+                                             resolution=self.config['input']['resolution'],
+                                             crop_region=self.config['input']['crop'],
+                                             scale_down_factor=self.config['input']['scale_down_factor'],
+                                             simulation_time=self.config['simulation']['duration'],
+                                             timestamp_unit=self.config['input']['timestamp_unit'])
             frames_right, _ = load_frames(input_path=os.path.join(self.config['input']['frames_path'], 'right'),
                                           resolution=self.config['input']['resolution'],
                                           crop_region=self.config['input']['crop'],
                                           scale_down_factor=self.config['input']['scale_down_factor'],
                                           simulation_time=self.config['simulation']['duration'],
                                           timestamp_unit=self.config['input']['timestamp_unit'])
+            # save_frames(frames_left, os.path.join(self.config['general']['output_dir'], 'frames_left'))
+            # save_frames(frames_right, os.path.join(self.config['general']['output_dir'], 'frames_right'))
             logger.info("Setting up MRF belief propagation network for frame-based stereo matching.")
             self.framebased_algorithm = \
                 FramebasedStereoMatching(algorithm=self.config['general']['framebased_algorithm'],
@@ -97,9 +98,18 @@ class HybridStereoMatching(object):
                                          inputs={'left': frames_left, 'right': frames_right, 'ts': times})
             if self.config['general']['use_prior_adjustment']:
                 logger.info("Setting up Velocity Field estimation for prior adjustment.")
-                self.prior_adjustment_algorithm = VelocityField(time_interval=20,
-                                                                neighbourhood_size=(3, 3),
-                                                                min_num_events_in_timespace_interval=5)
+                retina_spikes = load_spikes(input_file=self.config['input']['spikes_path'],
+                                            resolution=self.config['input']['resolution'],
+                                            crop_region=self.config['input']['crop'],
+                                            simulation_time=self.config['simulation']['duration'],
+                                            timestep_unit=self.config['input']['timestamp_unit'],
+                                            dt_thresh=1,
+                                            scale_down_factor=self.config['input']['scale_down_factor'],
+                                            as_spike_source_array=False)
+                self.prior_adjustment_algorithm = OpticalFlowPixelCorrection(resolution=self.effective_frame_resolution,
+                                                                             reference_events=retina_spikes['left'])
+            else:
+                logger.info("Skipping prior adjustment algorithm initialisation.")
         else:
             logger.info("Skipping frame-based stereo matching algorithm initialisation.")
 
@@ -135,8 +145,8 @@ class HybridStereoMatching(object):
                                                                    time_interval=prior_buffer_interval,
                                                                    pivots=pivots,
                                                                    non_pixel_value=-1)
-            save_frames(prior_frames, os.path.join(self.config['general']['output_dir'], 'prior_frames'))
+            # save_frames(prior_frames, os.path.join(self.config['general']['output_dir'], 'prior_frames'))
             prior_dict = {'priors': prior_frames, 'ts': timestamps}
             self.framebased_algorithm.run(prior_dict)
             depth_frames = self.framebased_algorithm.get_output()
-            save_frames(depth_frames, self.config['general']['output_dir'])
+            # save_frames(depth_frames, self.config['general']['output_dir'])

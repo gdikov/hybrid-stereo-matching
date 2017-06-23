@@ -16,10 +16,10 @@ input:
   frame_rate: 20                                # frames per second for the frame-based algorithm
   crop: !!python/tuple [55, 25]                 # offset from the vertical and the horizontal border (top left pixel coordinate)
   resolution: !!python/tuple [140, 120]         # in pixels, first is resolution along x (horizontal) axis and then y axis
-  max_disparity: 15                             # maximum detectable disparity in pixels
+  max_disparity: 30                             # maximum detectable disparity in pixels
   min_disparity: 0                              # minumum detectable disparity should be 0
   timestamp_unit: us                            # can be `us` for microseconds or ms for milliseconds
-  scale_down_factor: !!python/tuple [4, 4]      # x and y axes factors of down-scaling
+  scale_down_factor: !!python/tuple [2, 2]      # x and y axes factors of down-scaling
 
 # simulation related configuration
 simulation:
