@@ -138,6 +138,7 @@ class HybridStereoMatching(object):
 
         if self.config['simulation']['run_framebased']:
             pivots = self.framebased_algorithm.get_timestamps()
+            prior_nondata_value = -1
             prior_frames, timestamps = generate_frames_from_spikes(resolution=effective_frame_resolution,
                                                                    xs=prior_disparities['xs'],
                                                                    ys=prior_disparities['ys'],
@@ -145,9 +146,11 @@ class HybridStereoMatching(object):
                                                                    zs=prior_disparities['disps'],
                                                                    time_interval=self.prior_buffer_interval,
                                                                    pivots=pivots,
-                                                                   non_pixel_value=-1)
+                                                                   non_pixel_value=prior_nondata_value)
             if self.config['general']['use_prior_adjustment']:
-                prior_frames = self.prior_adjustment_algorithm.adjust(prior_frames)
+                prior_frames = self.prior_adjustment_algorithm.adjust(prior_frames,
+                                                                      prior_nondata_value=prior_nondata_value,
+                                                                      time_arrow=-1)
             save_frames(prior_frames, os.path.join(self.config['general']['output_dir'], 'prior_frames'))
             prior_dict = {'priors': prior_frames, 'ts': timestamps}
             self.framebased_algorithm.run(prior_dict)
