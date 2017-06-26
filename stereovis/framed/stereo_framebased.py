@@ -1,29 +1,34 @@
 import numpy as np
-from stereovis.framed.algorithms.mrf import StereoMRF
-
-import time
-from spinn_machine.utilities.progress_bar import ProgressBar
 import logging
+import time
+
+from stereovis.framed.algorithms import StereoMRF
+from spinn_machine.utilities.progress_bar import ProgressBar
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+from skimage import restoration, filters, morphology
+
 
 logger = logging.getLogger(__file__)
 
 
-class FramebasedStereoMatching:
-    def __init__(self, resolution, max_disparity, algorithm='mrf', frames=None):
+class FramebasedStereoMatching(object):
+    def __init__(self, resolution, max_disparity, algorithm='mrf', inputs=None):
         if algorithm == 'mrf':
             # reverse the resolution order since x-dimension corresponds to n_cols and y to n_rows
             # and the shape initialisation of numpy is (n_rows, n_cols) which is (y, x)
             x, y = resolution
             self.algorithm = StereoMRF(dim=(y, x), n_levels=max_disparity)
+            if inputs is not None:
+                # this means that the operational mode is offline and hence one can initialise the frame iterator
+                self.frames_left = np.asarray(inputs['left'])
+                self.frames_right = np.asarray(inputs['right'])
+                self.frames_timestamps = np.asarray(inputs['ts'])
+                # initialise the placeholder for the depth-resolved inputs
+                self.depth_frames = []
         else:
             raise NotImplementedError("Only MRF is supported.")
-        if frames is not None:
-            # this means that the operational mode is offline and hence one can initialise the frame iterator
-            self.frames_left = np.asarray(frames['left'])
-            self.frames_right = np.asarray(frames['right'])
-            self.frames_timestamps = np.asarray(frames['ts'])
-            # initialise the placeholder for the depth-resolved frames
-            self.depth_frames = []
 
     def get_timestamps(self):
         return self.frames_timestamps
@@ -32,7 +37,7 @@ class FramebasedStereoMatching:
         self.depth_frames = np.asarray(self.depth_frames)
         return self.depth_frames
 
-    def run_next_frame(self, image_left, image_right, prior=None):
+    def run_one_frame(self, image_left, image_right, prior=None):
         """
         Run one single frame of the frame-based stereo matching. Should be used when running online.
         
@@ -44,12 +49,7 @@ class FramebasedStereoMatching:
         Returns:
             A numpy array representing the depth map resolved by the algorithm.
         """
-        self.algorithm.loop_belief(image_left=image_left,
-                                   image_right=image_right,
-                                   prior=prior,
-                                   n_iter=10,
-                                   reinit_messages=True)
-        depth_map = self.algorithm.get_map_belief()
+        depth_map = self.algorithm.lbp(image_left, image_right, prior, 1.0, 2)
         self.depth_frames.append(depth_map)
         return depth_map
 
@@ -67,7 +67,8 @@ class FramebasedStereoMatching:
         if prior_info is not None:
             if len(prior_info['ts']) > n_frames:
                 # pick the n closest ones (where n is the number of frames)
-                prior_indices = [np.searchsorted(prior_info['ts'], t_frame, side="left") for t_frame in self.frames_timestamps]
+                prior_indices = [np.searchsorted(prior_info['ts'], t_frame, side="left")
+                                 for t_frame in self.frames_timestamps]
                 priors = prior_info['priors'][prior_indices]
             else:
                 priors = prior_info['priors']
@@ -75,16 +76,27 @@ class FramebasedStereoMatching:
 
             pb = ProgressBar(n_frames, "Starting offline frame-based stereo matching with prior initialisation.")
             start_timer = time.time()
-            for left, right, prior in zip(self.frames_left, self.frames_right, priors):
-                self.run_next_frame(left, right, prior)
+            for i, (left, right, prior) in enumerate(zip(self.frames_left, self.frames_right, priors)):
+                # left = restoration.denoise_bilateral(left, multichannel=False)
+                # right = restoration.denoise_bilateral(right, multichannel=False)
+                # left = filters.rank.enhance_contrast(left.astype(np.int32), morphology.disk(4))
+                # right = filters.rank.enhance_contrast(right.astype(np.int32), morphology.disk(4))
+                self.run_one_frame(left, right, prior)
+                plt.imsave('output/checkerboard_downsampled/left_{}.png'.format(i), left)
+                plt.imsave('output/checkerboard_downsampled/right_{}.png'.format(i), right)
+                plt.imsave('output/checkerboard_downsampled/prior_{}.png'.format(i), prior)
+                plt.imsave('output/checkerboard_downsampled/result_{}.png'.format(i), self.depth_frames[i])
                 pb.update()
             end_timer = time.time()
             pb.end()
         else:
             pb = ProgressBar(n_frames, "Starting offline frame-based stereo matching without prior initialisation.")
             start_timer = time.time()
-            for left, right in zip(self.frames_left, self.frames_right):
-                self.run_next_frame(left, right)
+            for i, (left, right) in enumerate(zip(self.frames_left, self.frames_right)):
+                self.run_one_frame(left, right)
+                plt.imsave('output/checkerboard_downsampled/left_{}.png'.format(i), left)
+                plt.imsave('output/checkerboard_downsampled/right_{}.png'.format(i), right)
+                plt.imsave('output/checkerboard_downsampled/result_{}.png'.format(i), self.depth_frames[i])
                 pb.update()
             end_timer = time.time()
             pb.end()

@@ -172,6 +172,7 @@ class SpikeParser:
         # down-sample the events first and then filter the bursts, as this operation increases the event density.
         # otherwise the dt_threshold constraint might be unsatisfied.
         if self.scale_down_factor != (1, 1):
+            logger.debug("Performing downscaling.")
             events['left'] = self.downsample(events['left'])
             events['right'] = self.downsample(events['right'])
             self.effective_resolution = np.asarray(self.effective_resolution) / np.asarray(self.scale_down_factor)
@@ -268,22 +269,23 @@ def load_spikes(input_file, crop_region=None, resolution=None,
     return retina_spikes
 
 
-def save_spikes(config_output, spikes):
+def save_spikes(output_dir, spikes, experiment_name='experiment'):
     """
     Save the spikes to a pickle file. 
     
     Args:
-        config_output: a configuration object containing the output directory and the experiment name
+        output_dir: str, the output directory where the spikes file will be written
         spikes: a dict containing the spikes with pixel coordinates, disparity values and timestamps
+        experiment_name: str, the name of the experiment used to encode the filename
 
     Returns:
         The full path to the pickled object
     """
-    output_folder_path = config_output['output_dir']
+    output_folder_path = output_dir
     if not os.path.exists(output_folder_path):
         os.makedirs(output_folder_path)
     timestamp = str(dt.now().isoformat())
-    filename = os.path.join(output_folder_path, config_output['name'] + "_tcd-out_" + timestamp + ".pickle")
+    filename = os.path.join(output_folder_path, experiment_name + "_tcd-out_" + timestamp + ".pickle")
     with open(filename, 'wb') as f:
         logger.debug("Saving {} spikes file.".format(filename))
         cPickle.dump(spikes, f)

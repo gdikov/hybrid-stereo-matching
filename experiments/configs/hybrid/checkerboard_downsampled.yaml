@@ -1,0 +1,31 @@
+# the general information is used for the experiment logging
+general:
+  name: Checkerboard_downsampled                # the experiment name, used for logging purposes
+  output_dir: output/checkerboard_downsampled   # path to directory where the output depth frames and events will be written to
+  mode: offline                                 # only offline mode is supported for now
+  eventbased_algorithm: tcd                     # Temporal Coincidence Network `tcd` is supported only
+  framebased_algorithm: mrf                     # Markov Random Field `mrf` is supported only
+  use_prior_adjustment: True                   # whether to use optical flow on retinal input for adjusting the depth events injection
+  network_params: checkerboard                  # will load stereovis/spiking/config/default_params.yaml
+                                                # for neural, synaptic and topological parameters
+
+# input related configuration
+input:
+  spikes_path: data/input/spikes/checkerboard_and_head.npz       # path to the file containing the retina events
+  frames_path: data/input/frames/checkerboard_and_head/          # path to the directory containing `left` and `right` folders with enumerated frames
+  frame_rate: 20                                # frames per second for the frame-based algorithm
+  buffer_frame_ratio: 1.0                       # portion of the frame that is used to buffer events, can be in (0, 1]
+  crop: !!python/tuple [0, 0]                   # offset from the vertical and the horizontal border (top left pixel coordinate)
+  resolution: !!python/tuple [240, 180]         # in pixels, first is resolution along x (horizontal) axis and then y axis
+  max_disparity: 30                             # maximum detectable disparity in pixels
+  min_disparity: 0                              # minumum detectable disparity should be 0
+  timestamp_unit: us                            # can be `us` for microseconds or ms for milliseconds
+  scale_down_factor: !!python/tuple [3, 3]      # x and y axes factors of down-scaling
+
+# simulation related configuration
+simulation:
+  run_eventbased: True                          # whether to run the spiking algorithm
+  run_framebased: True                          # whether to run the frame-based algorithm
+  duration: 15000                               # time in ms
+  timestep: 0.2                                 # time in ms
+  n_chips:  100                                 # each can simulate up to 16 neural populations with 255 neurons each

@@ -45,21 +45,21 @@ class StereoMRF(object):
                                    'data': np.zeros(self.dimension, dtype=np.float32)}
 
         nrow, ncol = self.reference_image.shape
-        # crop the border from the high right in the right image as it cannot be mathed to the left
+        # crop the border from the high right in the right image as it cannot be matched to the left
         if prior is not None:
             assert image_right.shape == prior.shape and prior.shape == self._message_field['data'].shape[1:]
             for l in xrange(self.n_levels):
-                data_contrib = np.hstack((np.abs(self.reference_image[:, l:] - self.secondary_image[:, :ncol - l]),
-                                          np.ones((nrow, l))))
-                # data_contrib /= np.max(data_contrib) * 1/(np.mean(data_contrib))
-                # print(data_contrib.min(), data_contrib.max(), data_contrib.mean())
-                prior_mask = prior == l
+                data_contrib = np.abs(self.reference_image[:, l:] - self.secondary_image[:, :ncol - l])
+                # normalise to [epsilon, 1], where epsilon >= 0
+                data_contrib /= np.max(data_contrib)
+                data_contrib = np.nan_to_num(data_contrib)
 
-                # equivalent to linear interpolating between the prior regions (having lowest possible value of -1)
-                # and the data (weighted by the data_trust_factor = 1 - prior_trust_factor)
-                self._message_field['data'][l, prior_mask] = (1 - prior_trust_factor) * data_contrib[prior_mask] \
-                                                             - prior_trust_factor
-                self._message_field['data'][l, ~prior_mask] = data_contrib[~prior_mask]
+                prior_mask = (prior == l)[:, l:]
+
+                # equivalent to linear interpolating between the prior pixels (0 on certain locations only)
+                # and the data (weighted by the trust factor = 1 - prior_trust_factor)
+                self._message_field['data'][l, :, l:][prior_mask] = (1 - prior_trust_factor) * data_contrib[prior_mask]
+                self._message_field['data'][l, :, l:][~prior_mask] = data_contrib[~prior_mask]
         else:
             for l in xrange(self.n_levels):
                 self._message_field['data'][l, :, l:] = np.abs(self.reference_image[:, l:]

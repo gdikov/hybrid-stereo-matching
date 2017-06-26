@@ -55,5 +55,10 @@ def latest_file_in_dir(dirname, extension='*', mode='creation'):
         key_ = os.path.getctime
     elif mode == 'modification':
         key_ = os.path.getmtime
-    latest_file = max(glob.iglob(os.path.join(dirname, '*.' + extension)), key=key_)
+    else:
+        raise ValueError("Unknown file mode {}".format(mode))
+    list_of_candidates = list(glob.iglob(os.path.join(dirname, '*.' + extension)))
+    if len(list_of_candidates) == 0:
+        raise IOError("Folder {} does not exist or contain files with extension `{}`".format(dirname, extension))
+    latest_file = max(list_of_candidates, key=key_)
     return latest_file

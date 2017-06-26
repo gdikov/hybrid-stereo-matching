@@ -1,12 +1,14 @@
-import numpy as np
 import os
+
 import matplotlib
+import numpy as np
+
 matplotlib.use('Agg')
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 
 from matplotlib.colors import Normalize
-from utils.frames_io import generate_frames_from_spikes
+from stereovis.utils.frames_io import generate_frames_from_spikes
 
 
 def plot_spikes(spikes, output_dir='data/output', image_naming='timestamps', resolution=(240, 180),

@@ -2,13 +2,12 @@ import re
 import numpy as np
 import os
 import logging
-import matplotlib as mpl
-mpl.use('Agg')
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 
 from datetime import datetime as dt
-from skimage.io import imread, imsave
+from skimage.io import imread
 from skimage.transform import rescale
 
 logger = logging.getLogger(__file__)
@@ -31,9 +30,9 @@ def load_ground_truth(filename):
         depth = int(fp.readline())
         assert depth <= 255
         raster = []
-        for y in range(height):
+        for i in range(height):
             row = []
-            for y in range(width):
+            for j in range(width):
                 row.append(ord(fp.read(1)))
             raster.append(row)
         return np.asarray(raster) / 14
@@ -57,7 +56,6 @@ def load_ground_truth(filename):
         # little endian
         if scale < 0:
             endian = '<'
-            scale = -scale
         # big endian
         else:
             endian = '>'
@@ -95,8 +93,8 @@ def load_frames(input_path, crop_region=None, resolution=None, scale_down_factor
         col_start, col_stop, row_start, row_stop = 0, 0, 0, 0
     scale_down_factor = np.asarray(scale_down_factor)
 
-    def downsample(img):
-        rescaled_img = rescale(img, 1.0 / scale_down_factor, preserve_range=True)
+    def downsample(image_to_scale):
+        rescaled_img = rescale(image_to_scale, 1.0 / scale_down_factor, preserve_range=True)
         return rescaled_img
 
     if os.path.isdir(input_path):
@@ -165,31 +163,19 @@ def save_frames(frames, output_dir):
         plt.gcf().clear()
 
 
-def generate_frames_from_spikes(resolution, xs, ys, ts, zs=None, start_time=0, time_interval=100,
-                                pivots=None, non_pixel_value='nan', return_time_indices=False):
+def split_frames_by_time(ts, start_time=0, time_interval=100, pivots=None):
     """
-    Generate frames from spikes given `x`, `y` coordinates, timestamp (`t`) for all spikes and possibly a 
-    `z` fill value for the pixel.
-    
+
     Args:
-        resolution: the resolution of the frames -- a tuple of x and y dimensionality
-        xs: a list of x-coordinates for each spike
-        ys: a list of y-coordinates for each spike
-        ts: a list ot timestamps for each spike
-        zs: optional, a list of fill values
-        start_time: optional, a starting time for the frames
-        time_interval: optional, the time length of the buffering for each frame in milliseconds
-        pivots: optional, a list of time ticks at which the frames are built (buffered `time_interval` ms before)
-        non_pixel_value: the value on the pixels where there is no data available
-        return_time_indices: bool, whether the indices of the timestamps at which frames are created should be returned 
+        ts:
+        start_time:
+        time_interval:
+        pivots:
 
     Returns:
-        A numpy array of shape N x *`resolution` representing the buffered frames.
+
     """
-    logger.info("Generating {} frames from spikes".format(len(pivots) if pivots is not None
-                                                          else int(np.max(ts)/time_interval)))
-    xs, ys, ts = np.asarray(xs).astype(np.int), np.asarray(ys).astype(np.int), np.asarray(ts)
-    zs = np.asarray(zs) if zs is not None else None
+    ts = np.asarray(ts)
     # sort the spike times by time and use the sorted indices order to access the events in chronological order too
     sorted_indices = np.argsort(ts)
     sorted_time = ts[sorted_indices]
@@ -208,6 +194,35 @@ def generate_frames_from_spikes(resolution, xs, ys, ts, zs=None, start_time=0, t
         indices_frames = [sorted_indices[np.where(np.logical_and(sorted_time >= tick - time_interval,
                                                                  sorted_time <= tick))[0]] for tick in pivots]
         timestamps = pivots
+    return indices_frames, timestamps
+
+
+def generate_frames_from_spikes(resolution, xs, ys, ts, zs, start_time=0, time_interval=100,
+                                pivots=None, non_pixel_value='nan', return_time_indices=False):
+    """
+    Generate frames from spikes given `x`, `y` coordinates, timestamp (`t`) for all spikes and possibly a 
+    `z` fill value for the pixel.
+    
+    Args:
+        resolution: the resolution of the frames -- a tuple of x and y dimensionality
+        xs: a list of x-coordinates for each spike
+        ys: a list of y-coordinates for each spike
+        ts: a list ot timestamps for each spike
+        zs: a list of fill values
+        start_time: optional, a starting time for the frames
+        time_interval: optional, the time length of the buffering for each frame in milliseconds
+        pivots: optional, a list of time ticks at which the frames are built (buffered `time_interval` ms before)
+        non_pixel_value: the value on the pixels where there is no data available
+        return_time_indices: bool, whether the indices of the timestamps at which frames are created should be returned 
+
+    Returns:
+        A numpy array of shape N x *`resolution` representing the buffered frames.
+    """
+    logger.info("Generating {} frames from spikes".format(len(pivots) if pivots is not None
+                                                          else int(np.max(ts)/time_interval)))
+    xs, ys, ts, zs = np.asarray(xs).astype(np.int), np.asarray(ys).astype(np.int), np.asarray(ts), np.asarray(zs)
+
+    indices_frames, timestamps = split_frames_by_time(ts, start_time, time_interval, pivots)
 
     # buffer the events into frames
     frames_count = len(indices_frames)
@@ -219,12 +234,7 @@ def generate_frames_from_spikes(resolution, xs, ys, ts, zs=None, start_time=0, t
         if cols.size == 0:
             # empty frame, skip value setting
             continue
-        # set pixel to 1 if spike has occurred at any time during the frame
-        if zs is None:
-            frames[i, rows, cols] = 1
-        # otherwise, set with the intensity value
-        else:
-            frames[i, rows, cols] = vals
+        frames[i, rows, cols] = vals
 
     if return_time_indices:
         return frames, timestamps, indices_frames
