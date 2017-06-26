@@ -81,7 +81,7 @@ class VelocityVectorField:
 
         return velocities
 
-    def fit_velocity_field(self, events, assume_sorted=False):
+    def fit_velocity_field(self, events, assume_sorted=False, concatenate_polarity_groups=True):
         """
         Compute velocity field for events. Group events by polarity and fit the velocity field on each group. 
         Merge the two results into a single one.
@@ -89,6 +89,7 @@ class VelocityVectorField:
         Args:
             events: ndarray, Nx4 array with N events, each with a timestamp, x, y coordinates and a polarity bit.
             assume_sorted: bool, whether the events are sorted by time.
+            concatenate_polarity_groups: bool, whether to return a single list of velocities or a tuple of two
 
         Returns:
             A Nx2 numpy array with the velocity in x and y direction for each event from the input. 
@@ -102,8 +103,11 @@ class VelocityVectorField:
         stream_negative = events[~positive_polarity_indices][:, :-1]
         positive_velocities = self._fit_velocity_field(stream_positive)
         negative_velocities = self._fit_velocity_field(stream_negative)
-        all_velocities = np.vstack([positive_velocities, negative_velocities])
-        return all_velocities
+        if concatenate_polarity_groups:
+            all_velocities = np.vstack([positive_velocities, negative_velocities])
+            return all_velocities
+        else:
+            return {'positive': positive_velocities, 'negative': negative_velocities}
 
 # if __name__ == '__main__':
 #     vf = VelocityVectorField()

@@ -38,6 +38,8 @@ class HybridStereoMatching(object):
                                            self.config['input']['scale_down_factor'][0],
                                            self.config['input']['resolution'][1] //
                                            self.config['input']['scale_down_factor'][1])
+        self.prior_buffer_interval = 1000 // (self.config['input']['frame_rate'] *
+                                              self.config['input']['buffer_frame_ratio'])
 
         if self.config['simulation']['run_eventbased']:
             logger.info("Preparing events for the event-based stereo matching.")
@@ -107,7 +109,9 @@ class HybridStereoMatching(object):
                                             scale_down_factor=self.config['input']['scale_down_factor'],
                                             as_spike_source_array=False)
                 self.prior_adjustment_algorithm = OpticalFlowPixelCorrection(resolution=self.effective_frame_resolution,
-                                                                             reference_events=retina_spikes['left'])
+                                                                             reference_events=retina_spikes['left'],
+                                                                             buffer_pivots=times,
+                                                                             buffer_interval=self.prior_buffer_interval)
             else:
                 logger.info("Skipping prior adjustment algorithm initialisation.")
         else:
@@ -133,19 +137,18 @@ class HybridStereoMatching(object):
             effective_frame_resolution = prior_disparities['meta']['resolution']
 
         if self.config['simulation']['run_framebased']:
-            if self.config['general']['use_prior_adjustment']:
-                self.prior_adjustment_algorithm.compute_velocity_field()
-            prior_buffer_interval = 1000 // self.config['input']['frame_rate'] // 4
             pivots = self.framebased_algorithm.get_timestamps()
             prior_frames, timestamps = generate_frames_from_spikes(resolution=effective_frame_resolution,
                                                                    xs=prior_disparities['xs'],
                                                                    ys=prior_disparities['ys'],
                                                                    ts=prior_disparities['ts'],
                                                                    zs=prior_disparities['disps'],
-                                                                   time_interval=prior_buffer_interval,
+                                                                   time_interval=self.prior_buffer_interval,
                                                                    pivots=pivots,
                                                                    non_pixel_value=-1)
-            # save_frames(prior_frames, os.path.join(self.config['general']['output_dir'], 'prior_frames'))
+            if self.config['general']['use_prior_adjustment']:
+                prior_frames = self.prior_adjustment_algorithm.adjust(prior_frames)
+            save_frames(prior_frames, os.path.join(self.config['general']['output_dir'], 'prior_frames'))
             prior_dict = {'priors': prior_frames, 'ts': timestamps}
             self.framebased_algorithm.run(prior_dict)
             depth_frames = self.framebased_algorithm.get_output()

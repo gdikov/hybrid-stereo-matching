@@ -3,44 +3,27 @@ import logging
 import time
 
 from stereovis.spiking.algorithms import VelocityVectorField
-from stereovis.utils.frames_io import generate_frames_from_spikes
+from stereovis.utils.frames_io import split_frames_by_time, generate_frames_from_spikes
 from spinn_machine.utilities.progress_bar import ProgressBar
 
 logger = logging.getLogger(__file__)
 
 
 class OpticalFlowPixelCorrection(object):
-    def __init__(self, resolution, reference_events, algorithm='vvf'):
+    def __init__(self, resolution, reference_events, buffer_pivots=None, buffer_interval=50, algorithm='vvf'):
+        self.resolution = resolution
         if algorithm == 'vvf':
             self.algorithm = VelocityVectorField()
-            self.event_frames, _, self.time_ind = generate_frames_from_spikes(resolution=resolution,
-                                                                              xs=reference_events[:, 1],
-                                                                              ys=reference_events[:, 2],
-                                                                              ts=reference_events[:, 0],
-                                                                              zs=reference_events[:, 3],
-                                                                              time_interval=50,
-                                                                              pivots=None,
-                                                                              non_pixel_value=-1,
-                                                                              return_time_indices=True)
-            self.velocity_field = None
+            indices_frames, _ = split_frames_by_time(ts=reference_events[:, 0],
+                                                     time_interval=buffer_interval,
+                                                     pivots=buffer_pivots)
+            self.reference_frames = np.split(reference_events, indices_frames)
         else:
             raise NotImplementedError("Only VRF is supported.")
 
-    def compute_velocity_field(self):
-        n_frames = len(self.event_frames)
-        pb = ProgressBar(n_frames, "Starting velocity field estimation for prior adjustment.")
-        start_timer = time.time()
-        vs = None
-        # FIXME: compute the whole events time-varying velocity field, not only per frame...
-        for i, frame in enumerate(self.event_frames):
-            vs = self.algorithm.fit_velocity_field(self.event_frames['right'][self.time_ind[i], :],
-                                                   assume_sorted=False)
-            pb.update()
-        end_timer = time.time()
-        pb.end()
-        logger.info("Velocity field estimation took {}s for {} events.".format((end_timer - start_timer), n_frames))
-        self.velocity_field = vs
-        return vs
+    def compute_velocity_field(self, timespace_frame, assume_sorted=False):
+        return self.algorithm.fit_velocity_field(timespace_frame, assume_sorted=assume_sorted,
+                                                 concatenate_polarity_groups=False)
 
     def adjust(self, events):
         """
@@ -55,10 +38,40 @@ class OpticalFlowPixelCorrection(object):
         Notes:
             The shift amounts to at most one pixel.
         """
-        if self.velocity_field is None:
-            self.compute_velocity_field()
-        for e in events:
-            pass
+        n_frames = len(self.reference_frames)
+        assert len(events) == n_frames, "Mismatching reference and unadjusted target " \
+                                        "frames, {} and {} frames respecively".format(n_frames, len(events))
+        pb = ProgressBar(n_frames, "Starting velocity field estimation for prior adjustment.")
+        start_timer = time.time()
+
+        adjusted_events = events.copy()
+        for i, (timespace_frame, prior_frame) in enumerate(zip(self.reference_frames, events)):
+            # compute (x, y) velocities for each camera event
+            velocities = self.compute_velocity_field(timespace_frame, assume_sorted=False)
+
+            # compute shift based on 8 directional compass
+            shifts = np.asarray([(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)])
+            compute_shift = lambda x, y: shifts[int(np.floor(np.round(8 * np.arctan2(y, x) / (2*np.pi)))) % 8] \
+                                         if np.linalg.norm([x, y]) > 1. else np.array([0, 0])
+
+            # project the velocities onto a 2D image plane which will be queried for a shift
+            mask_positive = timespace_frame[:, 3] == 0
+            velocity_frame = np.zeros(self.resolution[::-1])
+            velocity_frame[timespace_frame[mask_positive][:, 2],
+                           timespace_frame[mask_positive][:, 1]] = velocities['positive']
+            velocity_frame[timespace_frame[~mask_positive][:, 2],
+                           timespace_frame[~mask_positive][:, 1]] = velocities['negative']
+
+            # compute the corresponding shift for all events
+            # FIXME: compute the shift of the arrow relative to the pixel, not to the image center. verify the velocity
+            # values
+            for j, e in enumerate(prior_frame):
+                adjusted_events[i, j, 1:3] += compute_shift(e[1], e[2])
+            pb.update()
+        end_timer = time.time()
+        pb.end()
+        logger.info("Prior adaptation took {}s for {} events.".format((end_timer - start_timer), n_frames))
+        return adjusted_events
 
 
 

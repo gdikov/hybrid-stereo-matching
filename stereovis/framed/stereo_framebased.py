@@ -49,7 +49,7 @@ class FramebasedStereoMatching(object):
         Returns:
             A numpy array representing the depth map resolved by the algorithm.
         """
-        depth_map = self.algorithm.lbp(image_left, image_right, prior, 1.0, 10)
+        depth_map = self.algorithm.lbp(image_left, image_right, prior, 1.0, 2)
         self.depth_frames.append(depth_map)
         return depth_map
 
@@ -79,13 +79,13 @@ class FramebasedStereoMatching(object):
             for i, (left, right, prior) in enumerate(zip(self.frames_left, self.frames_right, priors)):
                 # left = restoration.denoise_bilateral(left, multichannel=False)
                 # right = restoration.denoise_bilateral(right, multichannel=False)
-                left = filters.rank.enhance_contrast(left.astype(np.int32), morphology.disk(4))
-                right = filters.rank.enhance_contrast(right.astype(np.int32), morphology.disk(4))
+                # left = filters.rank.enhance_contrast(left.astype(np.int32), morphology.disk(4))
+                # right = filters.rank.enhance_contrast(right.astype(np.int32), morphology.disk(4))
                 self.run_one_frame(left, right, prior)
-                plt.imsave('output/head_downsampled/left_{}.png'.format(i), left)
-                plt.imsave('output/head_downsampled/right_{}.png'.format(i), right)
-                plt.imsave('output/head_downsampled/prior_{}.png'.format(i), prior)
-                plt.imsave('output/head_downsampled/result_{}.png'.format(i), self.depth_frames[i])
+                plt.imsave('output/checkerboard_downsampled/left_{}.png'.format(i), left)
+                plt.imsave('output/checkerboard_downsampled/right_{}.png'.format(i), right)
+                plt.imsave('output/checkerboard_downsampled/prior_{}.png'.format(i), prior)
+                plt.imsave('output/checkerboard_downsampled/result_{}.png'.format(i), self.depth_frames[i])
                 pb.update()
             end_timer = time.time()
             pb.end()
@@ -94,9 +94,9 @@ class FramebasedStereoMatching(object):
             start_timer = time.time()
             for i, (left, right) in enumerate(zip(self.frames_left, self.frames_right)):
                 self.run_one_frame(left, right)
-                plt.imsave('output/head_downsampled/left_{}.png'.format(i), left)
-                plt.imsave('output/head_downsampled/right_{}.png'.format(i), right)
-                plt.imsave('output/head_downsampled/result_{}.png'.format(i), self.depth_frames[i])
+                plt.imsave('output/checkerboard_downsampled/left_{}.png'.format(i), left)
+                plt.imsave('output/checkerboard_downsampled/right_{}.png'.format(i), right)
+                plt.imsave('output/checkerboard_downsampled/result_{}.png'.format(i), self.depth_frames[i])
                 pb.update()
             end_timer = time.time()
             pb.end()
