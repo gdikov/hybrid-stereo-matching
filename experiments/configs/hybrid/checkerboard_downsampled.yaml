@@ -28,4 +28,5 @@ simulation:
   run_framebased: True                          # whether to run the frame-based algorithm
   duration: 15000                               # time in ms
   timestep: 0.2                                 # time in ms
+  time_scale_factor: 5                          # SpiNNaker slow down factor, needed for the hybrid matching synchronization
   n_chips:  100                                 # each can simulate up to 16 neural populations with 255 neurons each
