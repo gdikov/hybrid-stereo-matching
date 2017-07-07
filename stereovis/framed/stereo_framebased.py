@@ -37,7 +37,7 @@ class FramebasedStereoMatching(object):
         self.depth_frames = np.asarray(self.depth_frames)
         return self.depth_frames
 
-    def run_one_frame(self, image_left, image_right, prior=None):
+    def run_one_frame(self, image_left, image_right, prior=None, **kwargs):
         """
         Run one single frame of the frame-based stereo matching. Should be used when running online.
         
@@ -46,10 +46,15 @@ class FramebasedStereoMatching(object):
             image_right: a numpy array representing the right image
             prior: optional, a numpy array with disparity values 
 
+        Keyword Args:
+            prior_trust_factor: float, value between 0 and 1 for the prior influence
+            prior_influence_mode: str, can be 'const' or `adaptive` for the prior incorporation strategy
+            n_iter: int, number of iteration to run the algorithm
+
         Returns:
             A numpy array representing the depth map resolved by the algorithm.
         """
-        depth_map = self.algorithm.lbp(image_left, image_right, prior, 1.0, 2)
+        depth_map = self.algorithm.lbp(image_left, image_right, prior, **kwargs)
         self.depth_frames.append(depth_map)
         return depth_map
 
@@ -58,7 +63,7 @@ class FramebasedStereoMatching(object):
         Run the frame-based stereo matching on all frames and priors.
         
         Args:
-            prior_info: optional, a list of priors a subset of which is used to initialise the algorithm.  
+            prior_info: optional, a list of priors a subset of which is used to initialise the algorithm.
 
         Returns:
             
@@ -77,15 +82,8 @@ class FramebasedStereoMatching(object):
             pb = ProgressBar(n_frames, "Starting offline frame-based stereo matching with prior initialisation.")
             start_timer = time.time()
             for i, (left, right, prior) in enumerate(zip(self.frames_left, self.frames_right, priors)):
-                # left = restoration.denoise_bilateral(left, multichannel=False)
-                # right = restoration.denoise_bilateral(right, multichannel=False)
-                # left = filters.rank.enhance_contrast(left.astype(np.int32), morphology.disk(4))
-                # right = filters.rank.enhance_contrast(right.astype(np.int32), morphology.disk(4))
-                self.run_one_frame(left, right, prior)
-                plt.imsave('output/checkerboard_downsampled/left_{}.png'.format(i), left)
-                plt.imsave('output/checkerboard_downsampled/right_{}.png'.format(i), right)
-                plt.imsave('output/checkerboard_downsampled/prior_{}.png'.format(i), prior)
-                plt.imsave('output/checkerboard_downsampled/result_{}.png'.format(i), self.depth_frames[i])
+                self.run_one_frame(left, right, prior, prior_trust_factor=1.0,
+                                   prior_influence_mode='adaptive', n_iter=10)
                 pb.update()
             end_timer = time.time()
             pb.end()

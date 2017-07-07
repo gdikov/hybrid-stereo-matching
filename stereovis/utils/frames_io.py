@@ -94,7 +94,7 @@ def load_frames(input_path, crop_region=None, resolution=None, scale_down_factor
     scale_down_factor = np.asarray(scale_down_factor)
 
     def downsample(image_to_scale):
-        rescaled_img = rescale(image_to_scale, 1.0 / scale_down_factor, preserve_range=True)
+        rescaled_img = rescale(image_to_scale, 1.0 / scale_down_factor, preserve_range=True, mode='constant')
         return rescaled_img
 
     if os.path.isdir(input_path):

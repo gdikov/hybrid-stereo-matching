@@ -43,7 +43,8 @@ class TemporalCoincidenceDetectionNetwork:
                      (disp_range + 1) - (disp_range + 1) ** 2 + disp_range + 1) / 2
 
         self._network = self._create_network(record_spikes=(mode == 'offline'),
-                                             add_gating=self.params['topology']['add_gating'])
+                                             add_gating=self.params['topology']['add_gating'],
+                                             init_live_output=(mode == 'online'))
 
         self._connect_spike_sources(input_sources=input_sources)
         if self.params['topology']['add_uniqueness_constraint']:
@@ -53,21 +54,30 @@ class TemporalCoincidenceDetectionNetwork:
         if self.params['topology']['add_ordering_constraint']:
             self._apply_ordering_constraint()
 
-    def _create_network(self, record_spikes=False, add_gating=True):
+    def _create_network(self, record_spikes=False, add_gating=True, init_live_output=False):
         """
         Create the temporal event coincidence populations.
         
         Args:
             record_spikes: bool flag whether the spikes of the collector populations should be recorded
-            add_gating: bool flag whether the blocking neural gating should be added too 
+            add_gating: bool flag whether the blocking neural gating should be added too
+            init_live_output: bool, whether to initialise the collector populations for live spikes output streaming
 
         Returns:
-            a dict with keys 'collectors' containing a list of collector populations and if the blocking gates
+            A dict with keys 'collectors' containing a list of collector populations and if the blocking gates
             should be added, then a key 'blockers' contains a list of the blocker populations.
         """
         logger.info("Creating temporal coincidence detection network with {0} populations.".format(self.size))
 
+        if init_live_output:
+            try:
+                import spynnaker_external_devices_plugin.pyNN as ExternalDevices
+            except ImportError:
+                logger.warning("External modules are not found. Skipping live output activation.")
+                init_live_output = False
+
         network = {'blockers': [], 'collectors': []}
+        self.collector_labels = []
         for pop_id in xrange(self.size):
             if add_gating:
                 blocker_column = pyNN.Population(self.retina_n_rows * 2,
@@ -87,7 +97,11 @@ class TemporalCoincidenceDetectionNetwork:
                                                 'v_reset': self.params['neuron']['v_reset_collector']},
                                                label="Collector_{0}".format(pop_id))
             network['collectors'].append(collector_column)
+            self.collector_labels.append(collector_column.label)
 
+            if init_live_output:
+                ExternalDevices.activate_live_output_for(collector_column, database_notify_host="localhost",
+                                                         database_notify_port_num=19996)
             if record_spikes:
                 collector_column.record()
 
@@ -360,3 +374,22 @@ class TemporalCoincidenceDetectionNetwork:
                 spikes_in_pixeldisp_space['disps'].append(self._id2disparity[population_id])
         spikes_in_pixeldisp_space['meta']['resolution'] = (self.retina_n_cols, self.retina_n_rows)
         return spikes_in_pixeldisp_space
+
+    def get_labels(self):
+        """
+        Get the collector labels. This is used in live spikes sorting.
+
+        Returns:
+            A list of population labels.
+        """
+        return self.collector_labels
+
+    def get_mappings(self):
+        """
+        Get useful topological mappings. They are primarily used in determining the correct pixel location
+        of live spikes.
+
+        Returns:
+            A dict with topological mappings.
+        """
+        return {'id2pixel': self._id2pixel, 'id2disparity': self._id2disparity}

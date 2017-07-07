@@ -1,9 +1,12 @@
+from __future__ import division
+
 import logging
 import os
 
 import spynnaker.pyNN as pyNN
 
 from framed.stereo_framebased import FramebasedStereoMatching
+from framed.online_processing import OnlineMatching
 from spiking.optical_flow_correction import OpticalFlowPixelCorrection
 from spiking.nn_modules.spike_source import create_retina
 from spiking.stereo_snn import CooperativeNetwork
@@ -32,7 +35,7 @@ class HybridStereoMatching(object):
             In-place method
         """
         if self.config['general']['mode'] == 'online':
-            raise NotImplementedError("Online operational mode is not supported yet.")
+            logger.warning("Currently the online operational mode is supported only for live output.")
 
         self.effective_frame_resolution = (self.config['input']['resolution'][0] //
                                            self.config['input']['scale_down_factor'][0],
@@ -70,6 +73,7 @@ class HybridStereoMatching(object):
                                                                experiment_config=self.config['input'],
                                                                params=self.config['general']['network_params'],
                                                                operational_mode=self.config['general']['mode'])
+                self.network_meta = self.eventbased_algorithm.get_meta_info()
             else:
                 raise ValueError("Unsupported event-based algorithm. Currently only `tcd` (temporal coincidence "
                                  "detection) is supported.")
@@ -120,7 +124,23 @@ class HybridStereoMatching(object):
     def run(self):
         """
         Run the spiking network and the Markov random field according to the experiment configuration.
-        
+
+        Returns:
+            In-place method.
+        """
+        if self.config['general']['mode'] == 'offline':
+            self._run_offline()
+        else:
+            try:
+                self._run_online()
+            except RuntimeError:
+                logger.warning("Unexpected error during online mode. Restarting experiment in offline mode.")
+                self._run_offline()
+
+    def _run_offline(self):
+        """
+        Run the SNN network if desired and perform MRF stereo-matching afterwards.
+
         Returns:
             In-place method.
         """
@@ -155,4 +175,73 @@ class HybridStereoMatching(object):
             prior_dict = {'priors': prior_frames, 'ts': timestamps}
             self.framebased_algorithm.run(prior_dict)
             depth_frames = self.framebased_algorithm.get_output()
-            # save_frames(depth_frames, self.config['general']['output_dir'])
+            save_frames(depth_frames, self.config['general']['output_dir'])
+
+    def _run_online(self):
+        """
+       Run the spiking network and the Markov random field at the same time, using the live output stream from the SNN.
+
+       Returns:
+           In-place method.
+
+       Notes:
+           The online mode is limited to using only live SNN output spikes.
+       """
+        try:
+            from spynnaker_external_devices_plugin.pyNN.connections.spynnaker_live_spikes_connection import \
+                SpynnakerLiveSpikesConnection
+        except ImportError:
+            logger.warning("Spynnaker external modules are not installed. Exiting online mode.")
+            raise RuntimeError
+
+        def _gather_spikes(label, timestamp, neuron_ids):
+            """
+            Callback for the event processing.
+
+            Args:
+                label: str, the label of the population form which the event originates
+                timestamp: int, timestamp in milliseconds for the event
+                neuron_ids: list, one or mode neuron ids (int) which produced the spikes
+
+            Returns:
+                In-place method
+
+            Notes:
+                Keep this callback short and quick!
+            """
+            population_id = int(label.split('_')[1])
+            for neuron_id in neuron_ids:
+                disp = self.network_meta['id2disparity'][population_id]
+                col, row = self.network_meta['id2pixel'][population_id], neuron_id
+                # store the last spikes and its timestamp in the shared memory event and timestamp buffer
+                # notice that the event buffer is a flattened 2d array.
+                self.spikes_buffer[row * self.effective_frame_resolution[0] + col] = disp
+                self.spikes_ts.value = timestamp
+
+        def _init_simulation(label, event_connection):
+            """
+            Callback for the beginning of the simulation. Set the shared boolean flag.
+
+            Args:
+                label: str, unused argument
+                event_connection: SpyNNakerLiveEventConnection, unused argument
+
+            Returns:
+                In-place method.
+            """
+            self.simulation_started.value = True
+
+        live_connection = SpynnakerLiveSpikesConnection(receive_labels=self.network_meta['collector_labels'],
+                                                        local_port=19996,
+                                                        send_labels=None)
+        for label in self.network_meta['collector_labels']:
+            live_connection.add_receive_callback(label, _gather_spikes)
+            live_connection.add_start_callback(label, _init_simulation)
+
+        matcher = OnlineMatching(algorithm=self.framebased_algorithm,
+                                 snn_slow_down_factor=self.config['simulation']['time_scale_factor'],
+                                 frame_length=1000 // self.config['input']['frame_rate'])
+        self.spikes_buffer, self.spikes_ts, self.simulation_started = matcher.init_shared_buffer(
+            buffer_shape=self.effective_frame_resolution[::-1])
+        with matcher.run():
+            self.eventbased_algorithm.run(self.config['simulation']['duration'])

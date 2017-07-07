@@ -57,3 +57,9 @@ class CooperativeNetwork(SpikingNeuralNetwork):
 
     def get_output(self):
         return self.network.get_output()
+
+    def get_meta_info(self):
+        meta = {'collector_labels': self.network.get_labels()}
+        for k, v in self.network.get_mappings().items():
+            meta[k] = v
+        return meta
