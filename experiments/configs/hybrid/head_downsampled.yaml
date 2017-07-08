@@ -2,7 +2,7 @@
 general:
   name: Head_downsampled                        # the experiment name, used for logging purposes
   output_dir: output/head_downsampled           # path to directory where the output depth frames and events will be written to
-  mode: offline                                 # only offline mode is supported for now
+  mode: online                                 # only offline mode is supported for now
   eventbased_algorithm: tcd                     # Temporal Coincidence Network `tcd` is supported only
   framebased_algorithm: mrf                     # Markov Random Field `mrf` is supported only
   use_prior_adjustment: False                   # whether to use optical flow on retinal input for adjusting the depth events injection
@@ -24,8 +24,9 @@ input:
 
 # simulation related configuration
 simulation:
-  run_eventbased: False                         # whether to run the spiking algorithm
+  run_eventbased: True                         # whether to run the spiking algorithm
   run_framebased: True                          # whether to run the frame-based algorithm
   duration: 15000                               # time in ms
   timestep: 0.2                                 # time in ms
+  time_scale_factor: 5                          # SpiNNaker slow down factor, needed for the hybrid matching synchronization
   n_chips:  100                                 # each can simulate up to 16 neural populations with 255 neurons each

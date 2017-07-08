@@ -17,7 +17,7 @@ input:
   buffer_frame_ratio: 1.0                       # portion of the frame that is used to buffer events, can be in (0, 1]
   crop: !!python/tuple [0, 0]                   # offset from the vertical and the horizontal border (top left pixel coordinate)
   resolution: !!python/tuple [240, 180]         # in pixels, first is resolution along x (horizontal) axis and then y axis
-  max_disparity: 5                             # maximum detectable disparity in pixels
+  max_disparity: 20                             # maximum detectable disparity in pixels
   min_disparity: 0                              # minumum detectable disparity should be 0
   timestamp_unit: us                            # can be `us` for microseconds or ms for milliseconds
   scale_down_factor: !!python/tuple [6, 6]      # x and y axes factors of down-scaling

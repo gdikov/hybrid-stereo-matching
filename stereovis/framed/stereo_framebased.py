@@ -7,7 +7,6 @@ from spinn_machine.utilities.progress_bar import ProgressBar
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-from skimage import restoration, filters, morphology
 
 
 logger = logging.getLogger(__file__)
