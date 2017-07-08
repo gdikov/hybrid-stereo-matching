@@ -48,22 +48,21 @@ class OnlineMatching(object):
     def matching_loop(self):
         epoch_pc = time.time() * 1000
         for left, right, timestamp in self.frame_generator():
-            waiter_start = time.time()
-
             while not self.simulation_started:
                 # loop trap for synchronization purposes
                 epoch_pc = time.time() * 1000
-            tick_pc = time.time() * 1000 - epoch_pc
+            tick_pc = (time.time() * 1000 - epoch_pc) / self.slow_down_factor
             tick_snn = self.times_placeholder.value / self.slow_down_factor
             while tick_snn < timestamp - self.time_epsilon and tick_pc < timestamp - self.time_epsilon:
-                tick_pc = time.time() * 1000 - epoch_pc
+                tick_pc = (time.time() * 1000 - epoch_pc) / self.slow_down_factor
                 tick_snn = self.times_placeholder.value / self.slow_down_factor
-            print("waited for {}".format(time.time() - waiter_start))
-            start_timer = time.time()
+            mrf_start = time.time()
             prior = np.frombuffer(self.buffer_, dtype=np.int32).reshape(self.buffer_shape)
             self.framebased_module.run_one_frame(left, right, prior, n_iter=10)
             self._reset_buffer()
-            print("took: {}".format(time.time() - start_timer))
+            mrf_duration = (time.time() - mrf_start) * 1000
+            logger.info("Images at the {}-th ms have been processed in {} ms out of {} ms available time"
+                        .format(timestamp, mrf_duration, self.nominal_frame_length * self.slow_down_factor))
 
     @contextlib.contextmanager
     def run(self):
