@@ -158,7 +158,11 @@ def save_frames(frames, output_dir):
         # frame = ((frame / float(max_val) - min_val) * 255).astype(np.int8)
         # imsave(os.path.join(full_output_dir, '{}.png'.format(i)), frame)
         plt.imshow(frame, interpolation='none', vmin=min_val+0.1, vmax=max_val, cmap=cmap)
-        plt.colorbar()
+        try:
+            plt.colorbar()
+        except (IndexError, ValueError):
+            logger.warning("Frame {} in {} is plotted without a colorbar "
+                           "due to an internal error.".format(i, full_output_dir))
         plt.savefig(os.path.join(full_output_dir, '{}.png'.format(i)))
         plt.gcf().clear()
 

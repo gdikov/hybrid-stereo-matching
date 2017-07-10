@@ -244,7 +244,10 @@ class HybridStereoMatching(object):
         self.spikes_buffer, self.spikes_ts, self.simulation_started = matcher.init_shared_buffer(
             buffer_shape=self.effective_frame_resolution[::-1])
         with matcher.run():
-            self.eventbased_algorithm.run(self.config['simulation']['duration'])
+            try:
+                self.eventbased_algorithm.run(self.config['simulation']['duration'])
+            except Exception as e:
+                logger.error("An error occured during simulation or compilation: '{}'".format(e))
         prior_posterior = zip(*matcher.get_output())
         save_frames(prior_posterior[0], os.path.join(self.config['general']['output_dir'], 'priors'))
         save_frames(prior_posterior[1], os.path.join(self.config['general']['output_dir'], 'posteriors'))
