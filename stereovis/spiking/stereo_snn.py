@@ -1,4 +1,7 @@
-import spynnaker.pyNN as pyNN
+try:
+    import spynnaker7.pyNN as pyNN
+except ImportError:
+    import spynnaker.pyNN as pyNN
 from nn_modules.temporal_coincidence import TemporalCoincidenceDetectionNetwork
 # from nn_modules.spatial_constraints import EventFrameFusionNetwork
 

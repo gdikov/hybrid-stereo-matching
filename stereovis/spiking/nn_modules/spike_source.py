@@ -1,5 +1,8 @@
 import logging
-import spynnaker.pyNN as pyNN
+try:
+    import spynnaker7.pyNN as pyNN
+except ImportError:
+    import spynnaker.pyNN as pyNN
 
 logger = logging.getLogger(__file__)
 

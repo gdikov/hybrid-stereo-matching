@@ -3,7 +3,12 @@ from __future__ import division
 import logging
 import os
 
-import spynnaker.pyNN as pyNN
+try:
+    import spynnaker7.pyNN as pyNN
+except ImportError:
+    import spynnaker.pyNN as pyNN
+
+from numpy import save as save_array
 
 from framed.stereo_framebased import FramebasedStereoMatching
 from framed.online_processing import OnlineMatching
@@ -236,7 +241,11 @@ class HybridStereoMatching(object):
                                                         send_labels=None)
         for label in self.network_meta['collector_labels']:
             live_connection.add_receive_callback(label, _gather_spikes)
-            live_connection.add_start_callback(label, _init_simulation)
+            try:
+                live_connection.add_start_resume_callback(label, _init_simulation)
+            except AttributeError:
+                # using an older sPyNNaker release
+                live_connection.add_start_callback(label, _init_simulation)
 
         matcher = OnlineMatching(algorithm=self.framebased_algorithm,
                                  snn_slow_down_factor=self.config['simulation']['time_scale_factor'],
@@ -249,5 +258,11 @@ class HybridStereoMatching(object):
             except Exception as e:
                 logger.error("An error occured during simulation or compilation: '{}'".format(e))
         prior_posterior = zip(*matcher.get_output())
-        save_frames(prior_posterior[0], os.path.join(self.config['general']['output_dir'], 'priors'))
-        save_frames(prior_posterior[1], os.path.join(self.config['general']['output_dir'], 'posteriors'))
+        if not prior_posterior:
+            logger.warning("No output from the SNN has been detected.")
+            return
+        else:
+            save_array(os.path.join(self.config['general']['output_dir'], 'priors.npy'), prior_posterior[0])
+            save_array(os.path.join(self.config['general']['output_dir'], 'posteriors.npy'), prior_posterior[1])
+            save_frames(prior_posterior[0], os.path.join(self.config['general']['output_dir'], 'priors'))
+            save_frames(prior_posterior[1], os.path.join(self.config['general']['output_dir'], 'posteriors'))

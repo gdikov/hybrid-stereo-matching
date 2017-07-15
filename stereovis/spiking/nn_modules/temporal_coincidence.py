@@ -4,7 +4,11 @@ import os
 
 import numpy as np
 import scipy.sparse as sps
-import spynnaker.pyNN as pyNN
+try:
+    import spynnaker7.pyNN as pyNN
+except ImportError:
+    import spynnaker.pyNN as pyNN
+
 from stereovis.utils.config import load_config
 
 from stereovis.utils.helpers import pairs_of_neighbours
@@ -71,9 +75,12 @@ class TemporalCoincidenceDetectionNetwork:
 
         if init_live_output:
             try:
-                import spynnaker_external_devices_plugin.pyNN as ExternalDevices
+                from spynnaker_external_devices_plugin.pyNN import SpynnakerExternalDevicePluginManager
+                if getattr(SpynnakerExternalDevicePluginManager, 'activate_live_output_for', None) is None:
+                    # using an older ExternalDevicesPlugin release
+                    import spynnaker_external_devices_plugin.pyNN as SpynnakerExternalDevicePluginManager
             except ImportError:
-                logger.warning("External modules are not found. Skipping live output activation.")
+                logger.warning("External devices modules are not found. Skipping live output activation.")
                 init_live_output = False
 
         network = {'blockers': [], 'collectors': []}
@@ -100,8 +107,9 @@ class TemporalCoincidenceDetectionNetwork:
             self.collector_labels.append(collector_column.label)
 
             if init_live_output:
-                ExternalDevices.activate_live_output_for(collector_column, database_notify_host="localhost",
-                                                         database_notify_port_num=19996)
+                SpynnakerExternalDevicePluginManager.activate_live_output_for(collector_column,
+                                                                              database_notify_host="localhost",
+                                                                              database_notify_port_num=19996)
             if record_spikes:
                 collector_column.record()
 
