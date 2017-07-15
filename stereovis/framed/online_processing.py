@@ -15,8 +15,21 @@ np.set_printoptions(threshold=np.nan)
 
 
 class OnlineMatching(object):
+    """
+    Frame-based matching using live SpiNNaker output stream. Currently only the direction SpiNNaker --> PC is supported
+    but in a future version the other direction should be implemented too.
+    """
     def __init__(self, algorithm, snn_slow_down_factor=1.0, frame_length=50,
                  use_adaptive_iter=False, max_iter=10, min_iter=1):
+        """
+        Args:
+            algorithm: obj, an instance of the matching algorithm to be used. It must be initialised with the frames.
+            snn_slow_down_factor: float, the time scale factor of the SpiNNaker platform (configuration dependent)
+            frame_length: float, the time interval in milliseconds between consecutive frames
+            use_adaptive_iter: bool, whether to adapt the number of iterations for the MRF depending on the performance
+            max_iter: int, maximum number of MRF iterations
+            min_iter: int, minimum number of MRF iterations (in case adaptive mode is selected)
+        """
         self.framebased_module = algorithm
         self.slow_down_factor = snn_slow_down_factor
         self.use_adaptive_iter = use_adaptive_iter
@@ -34,6 +47,15 @@ class OnlineMatching(object):
         self.prior_posterior = mp.Manager().list()
 
     def init_shared_buffer(self, buffer_shape):
+        """
+        Initialise shared memory array for the prior buffering and timestamp communication between SpiNNaker and PC.
+
+        Args:
+            buffer_shape: tuple, the 2-D shape of the frames and priors
+
+        Returns:
+            Shared memory objects: 1-D flattened buffer array, timestamp holder and bool flag for the simulation start.
+        """
         self.buffer_shape = buffer_shape
         # prefer shared memory to server manager only for the speed advantage
         self.buffer_ = mp.Array(ctypes.c_int32, np.ones(np.prod(buffer_shape), dtype=np.int32) * -1, lock=True)
@@ -42,19 +64,43 @@ class OnlineMatching(object):
         return self.buffer_, self.times_placeholder, self.simulation_started
 
     def _reset_buffer(self):
+        """
+        Set buffer to initial value (clear from buffered spikes).
+
+        Returns:
+            In-place method.
+        """
         for i in range(np.prod(self.buffer_shape)):
             self.buffer_[i] = -1
 
     def get_output(self):
+        """
+        Get the output from the online matching algorithm.
+
+        Returns:
+            A list of frame tuples consisting of a prior and posterior image pairs.
+        """
         return self.prior_posterior
 
     def frame_generator(self):
+        """
+        Iterate over the frames and timestamps.
+
+        Yields:
+            Left and right images as well as a timestamp
+        """
         for left, right, timestamp in zip(self.framebased_module.frames_left,
                                           self.framebased_module.frames_right,
                                           self.framebased_module.frames_timestamps):
             yield left, right, timestamp
 
     def matching_loop(self):
+        """
+        Main loop to run during which buffered prior is used for initialising an MRF Belief Propagation loop.
+
+        Returns:
+            In-place method.
+        """
         epoch_pc = time.time() * 1000
         mrf_duration = self.nominal_frame_length * self.slow_down_factor  # large int
         n_iter = 0
@@ -90,6 +136,12 @@ class OnlineMatching(object):
 
     @contextlib.contextmanager
     def run(self):
+        """
+        Start the matching thread running in parallel to the SpiNNaker simulation.
+
+        Returns:
+            In-place method.
+        """
         self._reset_buffer()
         self.matching_deamon = mp.Process(target=self.matching_loop)
         self.matching_deamon.start()
@@ -98,9 +150,21 @@ class OnlineMatching(object):
         self.end()
 
     def end(self):
+        """
+        Terminate the matching thread.
+
+        Returns:
+            In-place method.
+        """
         self.matching_deamon.terminate()
         logger.info("Matching thread has been stopped.")
 
     def join(self):
+        """
+        Halt the main thread until subprocess completes (join call)
+
+        Returns:
+            In-place method.
+        """
         logger.info("Matching thread has been joined.")
         self.matching_deamon.join()
