@@ -248,6 +248,7 @@ class HybridStereoMatching(object):
                 live_connection.add_start_callback(label, _init_simulation)
 
         matcher = OnlineMatching(algorithm=self.framebased_algorithm,
+                                 simulation_time_step=self.config['simulation']['timestep'],
                                  snn_slow_down_factor=self.config['simulation']['time_scale_factor'],
                                  frame_length=1000 // self.config['input']['frame_rate'])
         self.spikes_buffer, self.spikes_ts, self.simulation_started = matcher.init_shared_buffer(

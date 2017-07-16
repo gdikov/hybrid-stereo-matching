@@ -19,11 +19,12 @@ class OnlineMatching(object):
     Frame-based matching using live SpiNNaker output stream. Currently only the direction SpiNNaker --> PC is supported
     but in a future version the other direction should be implemented too.
     """
-    def __init__(self, algorithm, snn_slow_down_factor=1.0, frame_length=50,
+    def __init__(self, algorithm, simulation_time_step=0.2, snn_slow_down_factor=1.0, frame_length=50,
                  use_adaptive_iter=False, max_iter=10, min_iter=1):
         """
         Args:
             algorithm: obj, an instance of the matching algorithm to be used. It must be initialised with the frames.
+            simulation_time_step: float, the SNN simulation time step
             snn_slow_down_factor: float, the time scale factor of the SpiNNaker platform (configuration dependent)
             frame_length: float, the time interval in milliseconds between consecutive frames
             use_adaptive_iter: bool, whether to adapt the number of iterations for the MRF depending on the performance
@@ -31,6 +32,7 @@ class OnlineMatching(object):
             min_iter: int, minimum number of MRF iterations (in case adaptive mode is selected)
         """
         self.framebased_module = algorithm
+        self.simulation_time_step = simulation_time_step
         self.slow_down_factor = snn_slow_down_factor
         self.use_adaptive_iter = use_adaptive_iter
         self.max_iter = max_iter
@@ -111,10 +113,10 @@ class OnlineMatching(object):
             # NOTE: there is ca. 1ms time difference between the SpiNNaker and the PC clock.
             # This can be compensated if necessary (e.g. using periodic synchronisation)
             tick_pc = (time.time() * 1000 - epoch_pc) / self.slow_down_factor
-            tick_snn = self.times_placeholder.value / self.slow_down_factor
+            tick_snn = self.times_placeholder.value * self.simulation_time_step
             while tick_snn < timestamp - self.time_epsilon and tick_pc < timestamp - self.time_epsilon:
                 tick_pc = (time.time() * 1000 - epoch_pc) / self.slow_down_factor
-                tick_snn = self.times_placeholder.value / self.slow_down_factor
+                tick_snn = self.times_placeholder.value * self.simulation_time_step
             mrf_start = time.time()
             prior = np.frombuffer(self.buffer_.get_obj(), dtype=np.int32).reshape(self.buffer_shape)
             if self.use_adaptive_iter:
