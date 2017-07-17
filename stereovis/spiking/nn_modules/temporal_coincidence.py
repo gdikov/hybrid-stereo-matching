@@ -41,6 +41,10 @@ class TemporalCoincidenceDetectionNetwork:
                            "Reducing to 0, for larger values are not supported yet."
                            .format(self.min_disparity))
             self.min_disparity = 0
+        if self.max_disparity >= self.retina_n_cols:
+            logger.warning("Detected invalid maximum disparity of {}. Reducing to {}, for larger values are "
+                           "physically not possible".format(self.max_disparity, self.retina_n_cols - 1))
+            self.max_disparity = self.retina_n_cols - 1
 
         disp_range = self.max_disparity - self.min_disparity
         self.size = (2 * (self.retina_n_cols - self.min_disparity) *
@@ -71,7 +75,11 @@ class TemporalCoincidenceDetectionNetwork:
             A dict with keys 'collectors' containing a list of collector populations and if the blocking gates
             should be added, then a key 'blockers' contains a list of the blocker populations.
         """
-        logger.info("Creating temporal coincidence detection network with {0} populations.".format(self.size))
+        if add_gating:
+            logger.info("Creating temporal coincidence detection network with "
+                        "{0} ensembles (equivalent to {1} populations).".format(self.size, self.size * 2))
+        else:
+            logger.info("Creating temporal coincidence detection network with {} populations).".format(self.size))
 
         if init_live_output:
             try:
@@ -318,10 +326,11 @@ class TemporalCoincidenceDetectionNetwork:
 
         connection_list = [(src, dst, self.params['synapse']['wCCe'], self.params['synapse']['dCCe'])
                            for src, dst in within_population_neuron_pairs]
-        for population in self._network['collectors']:
-            pyNN.Projection(presynaptic_population=population, postsynaptic_population=population,
-                            connector=pyNN.FromListConnector(connection_list),
-                            target='excitatory')
+        if len(self._network['collectors']) > 1:
+            for population in self._network['collectors']:
+                pyNN.Projection(presynaptic_population=population, postsynaptic_population=population,
+                                connector=pyNN.FromListConnector(connection_list),
+                                target='excitatory')
         logger.debug("Applying the continuity constraint on the temporal coincidence network completed.")
 
     def _apply_ordering_constraint(self):

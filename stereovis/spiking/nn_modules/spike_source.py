@@ -19,7 +19,7 @@ class Retina(object):
         # NOTE: numpy is row-major so the first axis represents the pixel columns (vertical) i.e. fixed x-coordinate
         # and the second the pixels within this column i.e. all y-coordinates
         # here n_cols and n_rows stand for the column_populations and rows within this column (not numpy rows/columns!)
-        self.n_cols, self.n_rows = spike_times.shape
+        self.n_cols, self.n_rows = spike_times.shape[:2]
 
         self.pixel_populations = []
         self.label = label
