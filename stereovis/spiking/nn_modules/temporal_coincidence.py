@@ -326,7 +326,7 @@ class TemporalCoincidenceDetectionNetwork:
 
         connection_list = [(src, dst, self.params['synapse']['wCCe'], self.params['synapse']['dCCe'])
                            for src, dst in within_population_neuron_pairs]
-        if len(self._network['collectors']) > 1:
+        if len(self._network['collectors']) > 1 and len(connection_list) > 0:
             for population in self._network['collectors']:
                 pyNN.Projection(presynaptic_population=population, postsynaptic_population=population,
                                 connector=pyNN.FromListConnector(connection_list),
