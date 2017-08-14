@@ -27,8 +27,8 @@ synapse:
 
 topology:
   add_gating: False
-  add_continuity_constraint: False
-  add_uniqueness_constraint: False
+  add_continuity_constraint: True
+  add_uniqueness_constraint: True
   add_ordering_constraint: False
   radius_continuity: 1                # continuity constraint range radius
   radius_ordering: 1                  # ordering constraint range radius

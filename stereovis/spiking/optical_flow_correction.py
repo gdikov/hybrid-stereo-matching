@@ -4,7 +4,7 @@ import time
 
 from stereovis.spiking.algorithms import VelocityVectorField
 from stereovis.utils.frames_io import split_frames_by_time
-from spinn_machine.utilities.progress_bar import ProgressBar
+from spinn_utilities.progress_bar import ProgressBar
 
 logger = logging.getLogger(__file__)
 
