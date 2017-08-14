@@ -69,7 +69,7 @@ def load_ground_truth(filename):
 
 
 def load_frames(input_path, crop_region=None, resolution=None, scale_down_factor=(1, 1),
-                simulation_time=None, timestamp_unit='us'):
+                simulation_time=None, timestamp_unit='us', adjust_contrast=False):
     """
     Load the input frames, sorted by time and possibly cropped to some resolution in some region. 
     
@@ -80,6 +80,9 @@ def load_frames(input_path, crop_region=None, resolution=None, scale_down_factor
         scale_down_factor: tuple of the x and y down-sampling factors
         simulation_time: the start and stop time or stop time of the simulation, used to take the frames of interest.
         timestamp_unit: the units of time for the timestamps. Can be `us` or `ms`.
+        adjust_contrast: bool, whether to transform the image in a way that the contrast is maximised.
+            This has a positive effect on stereo frames, as they are normalised to have same intensity range,
+            which in turn improves the matching better matching.
 
     Returns:
         A numpy array of shape KxNxM where N is the number of loaded images of dimension NxM and a list of timestamps
@@ -93,9 +96,17 @@ def load_frames(input_path, crop_region=None, resolution=None, scale_down_factor
         col_start, col_stop, row_start, row_stop = 0, 0, 0, 0
     scale_down_factor = np.asarray(scale_down_factor)
 
-    def downsample(image_to_scale):
-        rescaled_img = rescale(image_to_scale, 1.0 / scale_down_factor, preserve_range=True, mode='constant')
+    def downsample(img):
+        rescaled_img = rescale(img, 1.0 / scale_down_factor, preserve_range=True, mode='constant')
         return rescaled_img
+
+    def normalise_contrast(img):
+        scale_val = 1.
+        if img.max() - img.min() != 0:
+            normalised_img = scale_val / (img.max() - img.min()) * (img - img.min())
+        else:
+            normalised_img = np.ones_like(img) * scale_val
+        return normalised_img
 
     if os.path.isdir(input_path):
         if isinstance(simulation_time, tuple):
@@ -115,6 +126,9 @@ def load_frames(input_path, crop_region=None, resolution=None, scale_down_factor
             images = np.stack([downsample(imread(img)) for img in image_files])
         else:
             images = np.stack([downsample(imread(img)[row_start:row_stop, col_start:col_stop]) for img in image_files])
+
+        if adjust_contrast:
+            images = np.stack([normalise_contrast(img) for img in images])
 
         # load the timestamps if available
         timestamps_file = os.path.join(input_path, 'timestamps.npy')
@@ -168,17 +182,6 @@ def save_frames(frames, output_dir):
 
 
 def split_frames_by_time(ts, start_time=0, time_interval=100, pivots=None):
-    """
-
-    Args:
-        ts:
-        start_time:
-        time_interval:
-        pivots:
-
-    Returns:
-
-    """
     ts = np.asarray(ts)
     # sort the spike times by time and use the sorted indices order to access the events in chronological order too
     sorted_indices = np.argsort(ts)
