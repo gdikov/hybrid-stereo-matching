@@ -79,13 +79,14 @@ class TemporalCoincidenceDetectionNetwork:
             logger.info("Creating temporal coincidence detection network with "
                         "{0} ensembles (equivalent to {1} populations).".format(self.size, self.size * 2))
         else:
-            logger.info("Creating temporal coincidence detection network with {} populations).".format(self.size))
+            logger.info("Creating temporal coincidence detection network with {} populations.".format(self.size))
 
         if init_live_output:
             try:
-                from spynnaker_external_devices_plugin.pyNN import SpynnakerExternalDevicePluginManager
+                import spynnaker7.pyNN.external_devices as SpynnakerExternalDevicePluginManager
                 if getattr(SpynnakerExternalDevicePluginManager, 'activate_live_output_for', None) is None:
                     # using an older ExternalDevicesPlugin release
+                    logger.warning("Attempting to use old style `external_devices_plugin` import.")
                     import spynnaker_external_devices_plugin.pyNN as SpynnakerExternalDevicePluginManager
             except ImportError:
                 logger.warning("External devices modules are not found. Skipping live output activation.")

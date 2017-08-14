@@ -3,7 +3,7 @@ import logging
 import time
 
 from stereovis.framed.algorithms import StereoMRF
-from spinn_machine.utilities.progress_bar import ProgressBar
+from spinn_utilities.progress_bar import ProgressBar
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt

@@ -92,13 +92,15 @@ class HybridStereoMatching(object):
                                              crop_region=self.config['input']['crop'],
                                              scale_down_factor=self.config['input']['scale_down_factor'],
                                              simulation_time=self.config['simulation']['duration'],
-                                             timestamp_unit=self.config['input']['timestamp_unit'])
+                                             timestamp_unit=self.config['input']['timestamp_unit'],
+                                             adjust_contrast=True)
             frames_right, _ = load_frames(input_path=os.path.join(self.config['input']['frames_path'], 'right'),
                                           resolution=self.config['input']['resolution'],
                                           crop_region=self.config['input']['crop'],
                                           scale_down_factor=self.config['input']['scale_down_factor'],
                                           simulation_time=self.config['simulation']['duration'],
-                                          timestamp_unit=self.config['input']['timestamp_unit'])
+                                          timestamp_unit=self.config['input']['timestamp_unit'],
+                                          adjust_contrast=True)
             # save_frames(frames_left, os.path.join(self.config['general']['output_dir'], 'frames_left'))
             # save_frames(frames_right, os.path.join(self.config['general']['output_dir'], 'frames_right'))
             logger.info("Setting up MRF belief propagation network for frame-based stereo matching.")
@@ -193,11 +195,15 @@ class HybridStereoMatching(object):
            The online mode is limited to using only live SNN output spikes.
        """
         try:
-            from spynnaker_external_devices_plugin.pyNN.connections.spynnaker_live_spikes_connection import \
-                SpynnakerLiveSpikesConnection
+            from spynnaker7.pyNN.external_devices import SpynnakerLiveSpikesConnection
         except ImportError:
-            logger.warning("Spynnaker external modules are not installed. Exiting online mode.")
-            raise RuntimeError
+            try:
+                # deprecated external_devices_plugin import but working with older spynnaker versions
+                from spynnaker_external_devices_plugin.pyNN.connections.spynnaker_live_spikes_connection import \
+                    SpynnakerLiveSpikesConnection
+            except ImportError:
+                logger.warning("Spynnaker external device modules are not found. Exiting online mode.")
+                raise RuntimeError
 
         def _gather_spikes(label, timestamp, neuron_ids):
             """
@@ -254,10 +260,7 @@ class HybridStereoMatching(object):
         self.spikes_buffer, self.spikes_ts, self.simulation_started = matcher.init_shared_buffer(
             buffer_shape=self.effective_frame_resolution[::-1])
         with matcher.run():
-            try:
-                self.eventbased_algorithm.run(self.config['simulation']['duration'])
-            except Exception as e:
-                logger.error("An error occured during simulation or compilation: '{}'".format(e))
+            self.eventbased_algorithm.run(self.config['simulation']['duration'])
         prior_posterior = zip(*matcher.get_output())
         if not prior_posterior:
             logger.warning("No output from the SNN has been detected.")
