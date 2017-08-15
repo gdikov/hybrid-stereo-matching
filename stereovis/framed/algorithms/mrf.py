@@ -57,7 +57,7 @@ class StereoMRF(object):
                 prior_mask = (prior == l)[:, l:]
                 if prior_influence_mode == 'adaptive':
                     if data_diff.max() > 0:
-                        prior_trust_factor = (data_diff / data_diff.max())[prior_mask]
+                        prior_trust_factor = data_diff[prior_mask]
                     else:
                         prior_trust_factor = 0.
 

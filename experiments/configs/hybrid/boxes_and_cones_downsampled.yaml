@@ -1,7 +1,7 @@
 # the general information is used for the experiment logging
 general:
-  name: Checkerboard_downsampled                # the experiment name, used for logging purposes
-  output_dir: output/checkerboard_downsampled   # path to directory where the output depth frames and events will be written to
+  name: BoxesAndCones_downsampled                # the experiment name, used for logging purposes
+  output_dir: output/boxes_and_cones_downsampled   # path to directory where the output depth frames and events will be written to
   mode: offline                                 # only offline mode is supported for now
   eventbased_algorithm: tcd                     # Temporal Coincidence Network `tcd` is supported only
   framebased_algorithm: mrf                     # Markov Random Field `mrf` is supported only
@@ -11,13 +11,13 @@ general:
 
 # input related configuration
 input:
-  spikes_path: data/input/spikes/checkerboard_and_head.npz       # path to the file containing the retina events
-  frames_path: data/input/frames/checkerboard/          # path to the directory containing `left` and `right` folders with enumerated frames
+  spikes_path: data/input/spikes/boxes_and_cones.npz       # path to the file containing the retina events
+  frames_path: data/input/frames/boxes_and_cones/          # path to the directory containing `left` and `right` folders with enumerated frames
   frame_rate: 20                                # frames per second for the frame-based algorithm
   buffer_frame_ratio: 1.0                       # portion of the frame that is used to buffer events, can be in (0, 1]
   crop: !!python/tuple [0, 0]                   # offset from the vertical and the horizontal border (top left pixel coordinate)
   resolution: !!python/tuple [240, 180]         # in pixels, first is resolution along x (horizontal) axis and then y axis
-  max_disparity: 22                             # maximum detectable disparity in pixels
+  max_disparity: 20                             # maximum detectable disparity in pixels
   min_disparity: 0                              # minumum detectable disparity should be 0
   timestamp_unit: us                            # can be `us` for microseconds or ms for milliseconds
   scale_down_factor: !!python/tuple [3, 3]      # x and y axes factors of down-scaling

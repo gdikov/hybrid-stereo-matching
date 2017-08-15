@@ -66,6 +66,7 @@ class OpticalFlowPixelCorrection(object):
 
             # project the velocities onto a 2D image plane which will be queried for a shift
             mask_positive = timespace_frame[:, 3] == 0
+            # FIXME: the velocity_frame is not used. Bug. Fix in the eval.ipynb first, test there and fix then here too.
             velocity_frame = np.zeros(self.resolution[::-1] + (2,))
             velocity_frame[timespace_frame[mask_positive][:, 2].astype(np.int),
                            timespace_frame[mask_positive][:, 1].astype(np.int)] = velocities['positive']
